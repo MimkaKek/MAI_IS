@@ -112,8 +112,9 @@ std::size_t TBitTable::SizeInBits() {
 
 void TBitTable::Resize(std::size_t nTokens, std::size_t nFilenames) {
 
-    std::size_t nSizeX = BitsToBytes(nBits);
+    std::size_t nSizeX = BitsToBytes(nFilenames);
     std::size_t nSizeY = nTokens;
+    std::size_t nBits  = nFilenames;
     std::size_t nAllocSizeX = 1;
     std::size_t nAllocSizeY = 1;
     for(;nAllocSizeX <= nSizeX; nAllocSizeX *= 2);
@@ -174,7 +175,7 @@ void TBitTable::ReallocY() {
 
 void TBitTable::ReallocX() {
     for(std::size_t i = 0; i < this->sizeY; ++i) {
-        char* newAlloc = new char[this->allocSizeY]();
+        char* newAlloc = new char[this->allocSizeX]();
         if(newAlloc == nullptr) {
             std::cerr << "ERROR: new at TArray::reallocArray()!" << std::endl;
         }
@@ -191,31 +192,26 @@ void TBitTable::ReallocX() {
     return;
 }
 
-std::size_t TBitTable::Add(std::string token, std::string filename) {
-
-    char* cstrFn = new char[filename.length() + 1];
-    char* cstrT  = new char[token.length() + 1];
-    strcpy(cstrFn, filename.c_str());
-    strcpy(cstrT, token.c_str());
+std::size_t TBitTable::Add(std::string& token, std::string& filename) {
 
     std::size_t i = 0;
     std::size_t j = 0;
 
-    if(this->filenames.Insert(cstrFn, this->nBits) != nullptr) {
+    if(this->filenames.Insert(filename, this->nBits) != nullptr) {
         j = this->nBits;
         ++(this->nBits);
         this->sizeX = BitsToBytes(this->nBits);
     }
     else {
-        j = *(this->filenames.Lookup(cstrFn));
+        j = *(this->filenames.Lookup(filename));
     }
 
-    if(this->tokens.Insert(cstrT, this->sizeY) != nullptr) {
+    if(this->tokens.Insert(token, this->sizeY) != nullptr) {
         i = this->sizeY;
         ++(this->sizeY);
     }
     else {
-        i = *(this->tokens.Lookup(cstrT));
+        i = *(this->tokens.Lookup(token));
     }
 
     if (this->sizeY >= (this->allocSizeY / 2)) {
@@ -228,20 +224,17 @@ std::size_t TBitTable::Add(std::string token, std::string filename) {
         this->ReallocX();
     }
 
-    delete[] cstrFn;
-    delete[] cstrT;
-
     this->BitSet(i, j, 1);
     return 0;
 }
 
 void TBitTable::Print() {
-    TArray<char*> tokenList = this->tokens.KeyList();
-    TArray<char*> fileList = this->filenames.KeyList();
+    TArray<std::string*> tokenList = this->tokens.KeyList();
+    TArray<std::string*> fileList  = this->filenames.KeyList();
     for(std::size_t i = 0; i < tokenList.Size(); ++i) {
-        std::cout << "Token: " << tokenList[i] << " | Table: ";
+        std::cout << "Token: " << *tokenList[i] << " | Table: ";
         for(std::size_t j = 0; j < fileList.Size(); ++j) {
-            std::cout << (int) this->BitGet(tokenList[i], fileList[j]);
+            std::cout << (int) this->BitGet(*tokenList[i], *fileList[j]);
             if (j % 8 == 0 && j > 0) {
                 std::cout << " ";
             }
@@ -250,75 +243,41 @@ void TBitTable::Print() {
     }
 }
 
-TArray<char*> TBitTable::GetFileList() {
+void TBitTable::WriteToFile(std::string& filename) {
+
+    std::fstream file(filename, std::ios::out);
+
+    TArray<std::string*> tokenList = this->tokens.KeyList();
+    TArray<std::string*> fileList = this->filenames.KeyList();
+    for(std::size_t i = 0; i < tokenList.Size(); ++i) {
+        file << "| Token: " << *tokenList[i] << std::endl << "| Table:";
+        for(std::size_t j = 0; j < fileList.Size(); ++j) {
+            file << (int) this->BitGet(*tokenList[i], *fileList[j]);
+            if (j % 8 == 0 && j > 0) {
+                file << " ";
+            }
+        }
+        file << std::endl;
+        file << "=======" << std::endl;
+    }
+
+    file << std::endl;
+
+    for(std::size_t j = 0; j < fileList.Size(); ++j) {
+        file << j << ": " << *fileList[j] << std::endl;
+    }
+
+    file.close();
+
+    return;
+}
+
+TArray<std::string*> TBitTable::GetFileList() {
     return TArray(this->filenames.KeyList());
 }
 
-unsigned char TBitTable::BitGet(std::string* token, std::string* filename) {
+unsigned char TBitTable::BitGet(std::string& token, std::string& filename) {
 
-    char *cstrFn = new char[filename->length() + 1];
-    char *cstrT  = new char[token->length() + 1];
-    strcpy(cstrFn, filename->c_str());
-    strcpy(cstrT, token->c_str());
-
-    std::size_t* tmpI = this->tokens.Lookup(cstrT);
-    std::size_t* tmpJ = this->filenames.Lookup(cstrFn);
-
-    if(tmpI == nullptr || tmpJ == nullptr) {
-        return 2;
-    }
-    
-    std::size_t i = *tmpI;
-    std::size_t j = *tmpJ;
-
-    delete[] cstrFn;
-    delete[] cstrT;
-
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitGet(std::string, std::string)!" << std::endl;
-        return 2;
-    }
-    int k = (j & 0x7);
-    return ( (*(this->bitStream[i] + (j >> 3))) >> k) & 0x01;
-}
-
-unsigned char TBitTable::BitSet(std::string* token, std::string* filename, unsigned char value) {
-    char *cstrFn = new char[filename->length() + 1];
-    char *cstrT  = new char[token->length() + 1];
-    strcpy(cstrFn, filename->c_str());
-    strcpy(cstrT, token->c_str());
-
-    std::size_t i = *(this->tokens.Lookup(cstrT));
-    std::size_t j = *(this->filenames.Lookup(cstrFn));
-
-    delete[] cstrFn;
-    delete[] cstrT;
-
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitSet(std::string, std::string, unsigned char)!" << std::endl;
-        return 2;
-    }
-    int k = (j & 0x7);
-    value = value ? 0x80 : 0x0;
-    *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) | value >> k;
-    return 0;
-}
-
-unsigned char TBitTable::BitSet(char* token, char* filename, unsigned char value) {
-    std::size_t i = *(this->tokens.Lookup(token));
-    std::size_t j = *(this->filenames.Lookup(filename));
-
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitSet(std::string, std::string, unsigned char)!" << std::endl;
-        return 2;
-    }
-    int k = (j & 0x7);
-    value = value ? 0x80 : 0x0;
-    *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) | value >> k;
-    return 0;
-}
-
-unsigned char TBitTable::BitGet(char* token, char* filename) {
     std::size_t* tmpI = this->tokens.Lookup(token);
     std::size_t* tmpJ = this->filenames.Lookup(filename);
 
@@ -335,6 +294,21 @@ unsigned char TBitTable::BitGet(char* token, char* filename) {
     }
     int k = (j & 0x7);
     return ( (*(this->bitStream[i] + (j >> 3))) >> k) & 0x01;
+}
+
+unsigned char TBitTable::BitSet(std::string& token, std::string& filename, unsigned char value) {
+
+    std::size_t i = *(this->tokens.Lookup(token));
+    std::size_t j = *(this->filenames.Lookup(filename));
+
+    if (j >= this->nBits || i >= this->sizeY) {
+        std::cerr << "ERROR: out of border in TBitTable::BitSet(std::string, std::string, unsigned char)!" << std::endl;
+        return 2;
+    }
+    int k = (j & 0x7);
+    value = value ? 0x80 : 0x0;
+    *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) | value >> k;
+    return 0;
 }
 
 unsigned char TBitTable::BitGet(std::size_t i, std::size_t j) {

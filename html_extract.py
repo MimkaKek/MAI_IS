@@ -1,10 +1,8 @@
-import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 import time
 import os
-import re
 import json
-from mlogger import Logger
 
 class HTMLExtractor:
     
@@ -22,6 +20,8 @@ class HTMLExtractor:
         self.total_pages     = 0
         self.total_lines     = 0
         self.current_line    = 0
+
+        self.begin_time      = time.time()
 
     def createHTML(self, title, text, name):
 
@@ -77,7 +77,11 @@ class HTMLExtractor:
                         self.buffer += line
                     if "</page>" in line:
                         get_page_segment = False
-                        print("\r> | Total pages: " + str(self.total_pages) + " | Total HTML-docs: " + str(self.total_html) + " | Total lines: " + str(self.total_lines) + " |", end="")
+                        delta_time = time.gmtime(time.time() - self.begin_time)
+                        tm_hour = str(delta_time.tm_hour) if delta_time.tm_hour > 9 else "0" + str(delta_time.tm_hour)
+                        tm_min = str(delta_time.tm_min) if delta_time.tm_min > 9 else "0" + str(delta_time.tm_min)
+                        tm_sec = str(delta_time.tm_sec) if delta_time.tm_sec > 9 else "0" + str(delta_time.tm_sec)
+                        print("\r> | Total time: " + tm_hour + ":" + tm_min + ":" + tm_sec + " | Total pages: " + str(self.total_pages) + " | Total HTML-docs: " + str(self.total_html) + " | Total lines: " + str(self.total_lines) + " |", end="")
                         self.total_pages += 1
                         title, text = self.parseXMLSegment(self.buffer)
                         self.createHTML(title, text, self.total_pages)

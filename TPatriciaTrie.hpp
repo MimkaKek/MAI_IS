@@ -17,9 +17,9 @@ class TPatriciaTrie {
         };
 
         void                    RecursiveRemove(TPatriciaTrieItem<T>*);
-        int                     BitGet(char*, int);
-        int                     BitFirstDifferent(char*, char*);
-        bool                    KeyCompare(char*, char*);
+        int                     BitGet(const char*, int);
+        int                     BitFirstDifferent(const char*, const char*);
+        bool                    KeyCompare(const char*, const char*);
         void                    KeyCopy(TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
         
         TPatriciaTrieItem<T>*   head;
@@ -30,12 +30,12 @@ class TPatriciaTrie {
         TPatriciaTrie();
         virtual ~TPatriciaTrie();
         
-        TPatriciaTrieItem<T>*   LookupNode(char*);
-        T*                      Lookup(char*);
-        TPatriciaTrieItem<T>*   Insert(char*, T);
-        bool                    Delete(char*);
+        TPatriciaTrieItem<T>*   LookupNode(std::string&);
+        T*                      Lookup(std::string&);
+        TPatriciaTrieItem<T>*   Insert(std::string&, T);
+        bool                    Delete(std::string&);
         
-        TArray<char*>           KeyList();
+        TArray<std::string*>    KeyList();
         std::size_t             Size();
 
         TPatriciaTrieItem<T>*   GetHead();
@@ -47,8 +47,8 @@ class TPatriciaTrie {
         bool                    SaveTrieBefore(TPatriciaTrieItem<T>*, std::ofstream*);
         bool                    SaveTrieCurrent(TPatriciaTrieItem<T>*, std::ofstream*);
         
-        void                    LoadTrieBefore(char*, std::ifstream*);
-        void                    LoadTrieCurrent(char*, TPatriciaTrieItem<T>*, std::ifstream*);
+        void                    LoadTrieBefore(std::string&, std::ifstream*);
+        void                    LoadTrieCurrent(std::string&, TPatriciaTrieItem<T>*, std::ifstream*);
 };
 
 #endif

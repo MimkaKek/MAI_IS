@@ -1,6 +1,8 @@
 from bs4 import BeautifulSoup
 from sys import argv
 import re
+import os
+from pathlib import Path
 
 if len(argv) > 1:
     html_content = ""
@@ -71,6 +73,12 @@ if len(argv) > 1:
         output = output.split()
         output = list(dict.fromkeys(output))
         fileToSave = arg[:-4] + "data"
+        i = -1
+        while fileToSave[i] != '/':
+            i = i - 1
+        fileToSave = fileToSave[:i] + "/data" + fileToSave[i:]
+        if not os.path.exists(fileToSave[:i-1] + "/data"):
+            os.makedirs(fileToSave[:i-1] + "/data")
         with open(fileToSave, "w") as save:
             for token in output:
                 save.write(token + "\n")

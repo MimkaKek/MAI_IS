@@ -23,7 +23,6 @@ class TSyntaxTree {
         void LookForNegation();
         void RecPrint(TSyntaxTreeItem*, int);
         unsigned char RecCalcBool(TSyntaxTreeItem*, std::string*, TBitTable*);
-        unsigned char RecCalcBool(TSyntaxTreeItem*, char*, TBitTable*);
 
     public:
 

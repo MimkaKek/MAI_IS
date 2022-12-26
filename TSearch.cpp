@@ -112,6 +112,16 @@ void TSearch::LoadIndex() {
     for (const auto & entry : fs::directory_iterator(this->root)) {
         filePath = entry.path();
         if(filePath.find(".html") != std::string::npos) {
+            // std::string cmd = "python3 extract_text_from_html.py " + filePath;
+            // char* cStrCmd  = new char[cmd.length() + 1];
+            // strcpy(cStrCmd, cmd.c_str());
+            // system(cStrCmd);
+            // delete[] cStrCmd;
+            // std::size_t fSize = filePath.length();
+            // filePath[fSize - 4] = 'd';
+            // filePath[fSize - 3] = 'a';
+            // filePath[fSize - 2] = 't';
+            // filePath[fSize - 1] = 'a';
             continue;
         }
         file.open(filePath, std::fstream::in);
@@ -120,11 +130,11 @@ void TSearch::LoadIndex() {
             std::size_t nLine = 0;
             while(std::getline(file, str)) {
                 ++nLine;
-                std::size_t fSize = filePath.size();
-                filePath[fSize - 1] = 'l';
-                filePath[fSize - 2] = 'm';
-                filePath[fSize - 3] = 't';
+                std::size_t fSize = filePath.length();
                 filePath[fSize - 4] = 'h';
+                filePath[fSize - 3] = 't';
+                filePath[fSize - 2] = 'm';
+                filePath[fSize - 1] = 'l';
                 this->index.Add(str, filePath);
             }
             file.close();
@@ -135,8 +145,8 @@ void TSearch::LoadIndex() {
         }
     }
     std::cout << "\33[2K\rReading finished!" << std::endl;
-
-    this->index.Print();
+    std::string sFilename = "IndexInfo.data";
+    this->index.WriteToFile(sFilename);
     return;
 }
 
@@ -149,7 +159,7 @@ TArray<std::string> TSearch::BooleanSearch(std::string strToSearch) {
     
     unsigned char result;
 
-    TArray<char*> files = this->index.GetFileList();
+    TArray<std::string*> files = this->index.GetFileList();
     std::size_t sizeF = files.Size();
 
     TArray<std::string> data;
@@ -159,7 +169,7 @@ TArray<std::string> TSearch::BooleanSearch(std::string strToSearch) {
         result = this->tree.CalcBool(files[j], &(this->index));
 
         if(result) {
-            data.Push(std::string(files[j]));
+            data.Push(std::string(*files[j]));
         }
     }
 

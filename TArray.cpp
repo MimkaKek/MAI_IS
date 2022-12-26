@@ -159,9 +159,10 @@ T TArray<T>::Get(std::size_t i) {
     return *this->data[i];
 }
 
-template <class T> class TPatriciaTrieItem; 
-
+template <class T> class TPatriciaTrieItem;
 template class TArray<std::string>;
 template class TArray<std::size_t>;
-template class TArray<char*>;
-template class TArray<TPatriciaTrieItem<unsigned long>*>;
+template class TArray<TArray<std::size_t>>;
+template class TArray<std::string*>;
+template class TArray<TPatriciaTrieItem<std::size_t>*>;
+template class TArray<TPatriciaTrieItem<std::string>*>;

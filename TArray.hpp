@@ -5,6 +5,17 @@
 #include <cstdlib>
 
 template <typename T>
+class TArray;
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const TArray<T>& array) {
+    for(std::size_t i = 0; i < array.n; ++i) {
+        os << array.data[i] << std::endl;
+    }
+    return os;
+}
+
+template <typename T>
 class TArray {
     private:
 
@@ -62,6 +73,8 @@ class TArray {
 
             return *this;
         }
+        
+        friend std::ostream& operator<< <>(std::ostream&, const TArray<T>&);
 };
 
 #endif

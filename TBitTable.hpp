@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include "TPatriciaTrie.hpp"
 
@@ -45,21 +46,20 @@ class TBitTable {
         void ReallocX();
         void ReallocY();
 
+        void WriteToFile(std::string&);
         void Print();
 
-        std::size_t AddX(std::string);
-        std::size_t AddY(std::string);
-        std::size_t Add(std::string, std::string);
+        std::size_t AddX(std::string&);
+        std::size_t AddY(std::string&);
+        std::size_t Add(std::string&, std::string&);
 
-        TArray<char*> GetFileList();
+        TArray<std::string*> GetFileList();
 
-        unsigned char BitSet(std::string*, std::string*, unsigned char);
+        unsigned char BitSet(std::string&, std::string&, unsigned char);
         unsigned char BitSet(std::size_t, std::size_t, unsigned char);
-        unsigned char BitSet(char*, char*, unsigned char);
         
-        unsigned char BitGet(std::string*, std::string*);
+        unsigned char BitGet(std::string&, std::string&);
         unsigned char BitGet(std::size_t, std::size_t);
-        unsigned char BitGet(char*, char*);
 
         TBitTable& operator= (const TBitTable& table) {
             

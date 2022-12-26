@@ -1,0 +1,6 @@
+ruwiki/
+.vscode/
+*.o
+ruwiki.xml
+IndexInfo.data
+main

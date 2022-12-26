@@ -1,6 +1,8 @@
 #ifndef T_PATRICIA_TRIE_HPP
 #define T_PATRICIA_TRIE_HPP
 
+#include <string>
+
 template <class T> class TPatriciaTrie;
 
 template <class T>
@@ -10,7 +12,7 @@ class TPatriciaTrieItem {
         friend class TPatriciaTrie<T>;
         
         T                       data;
-        char*                   key;
+        std::string             key;
         int                     index;
         TPatriciaTrieItem<T>*   left;
         TPatriciaTrieItem<T>*   right;
@@ -18,10 +20,10 @@ class TPatriciaTrieItem {
     public:
 
         TPatriciaTrieItem();
-        TPatriciaTrieItem(char*, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
+        TPatriciaTrieItem(std::string&, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
         virtual ~TPatriciaTrieItem();
 
-        void Initialize(char*, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
+        void Initialize(std::string&, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
 };
 
 #endif

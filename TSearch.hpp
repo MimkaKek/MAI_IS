@@ -37,6 +37,6 @@ class TSearch {
         TArray<std::string> BooleanSearch(std::string);
 };
 
-const std::string DOC_PATH = "./ruwiki";
+const std::string DOC_PATH = "./ruwiki/data";
 
 #endif

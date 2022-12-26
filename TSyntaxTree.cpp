@@ -254,41 +254,11 @@ unsigned char TSyntaxTree::RecCalcBool(TSyntaxTreeItem* node, std::string* filen
         return this->RecCalcBool(node->getLeft(), filename, index);
     }
     else {
-        return index->BitGet(node->getTokenPtr(), filename);
-    }
-}
-
-unsigned char TSyntaxTree::RecCalcBool(TSyntaxTreeItem* node, char* filename, TBitTable* index) {
-
-    if (!node) {
-        return 1;
-    }
-
-    std::string* token = node->getTokenPtr();
-
-    if (*token == "||") {
-        return this->RecCalcBool(node->getLeft(), filename, index) | this->RecCalcBool(node->getRight(), filename, index);
-    }
-    else if (*token == "&&") {
-        return this->RecCalcBool(node->getLeft(), filename, index) & this->RecCalcBool(node->getRight(), filename, index);
-    }
-    else if (*token == "!!") {
-        return (this->RecCalcBool(node->getLeft(), filename, index)) ? 0 : 1;
-    }
-    else if (*token == ")") {
-        return this->RecCalcBool(node->getLeft(), filename, index);
-    }
-    else {
-        std::string str(filename);
-        return index->BitGet(node->getTokenPtr(), &str);
+        return index->BitGet(*node->getTokenPtr(), *filename);
     }
 }
 
 unsigned char TSyntaxTree::CalcBool(std::string* filename, TBitTable* index) {
-    return RecCalcBool(this->root, filename, index);
-}
-
-unsigned char TSyntaxTree::CalcBool(char* filename, TBitTable* index) {
     return RecCalcBool(this->root, filename, index);
 }
 

@@ -31,11 +31,11 @@ class TRevIndex {
 
         void Print();
         void Reset();
-        void Reset(std::string);
+        void Reset(std::string&);
 
-        std::size_t Add(std::string, std::string);
+        std::size_t Add(std::string&, std::string&);
 
-        std::string Get(std::string);
+        std::string Get(std::string&);
 };
 
 #endif
