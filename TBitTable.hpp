@@ -6,86 +6,84 @@
 #include <fstream>
 #include <cstring>
 #include "TPatriciaTrie.hpp"
+#include "TFileData.hpp"
 
-class TBitTable {
+class TBitIndex {
     private:
-        
-        // X - Filenames
-        // Y - Tokens
-        // bitStream[Y][X]
 
-        char**      bitStream;
-        
+        char**      bitTable;
+        bool        check;
         std::size_t nBits;
-        std::size_t sizeX;
-        std::size_t allocSizeX;
+        std::size_t nBytes;
+        std::size_t allocBytes;
 
-        std::size_t sizeY;
-        std::size_t allocSizeY;
+        std::size_t nTokens;
+        std::size_t allocTokens;
 
-        TPatriciaTrie<std::size_t> filenames;
-        TPatriciaTrie<std::size_t> tokens;
+        TPatriciaTrie<std::size_t> filenameToID;
+        TPatriciaTrie<std::size_t> tokensToID;
+        TPatriciaTrie<TFileData>   iDToFiledata;
 
         std::size_t BitsToBytes(std::size_t);
 
     public:
 
-        TBitTable();
-        TBitTable(std::size_t, std::size_t);
-        TBitTable(const TBitTable&);
+        TBitIndex();
+        TBitIndex(std::size_t, std::size_t);
+        TBitIndex(const TBitIndex&);
 
-        ~TBitTable();
+        ~TBitIndex();
         void Clear();
         void Init(std::size_t, std::size_t);
 
         std::size_t SizeInBytes();
         std::size_t SizeInBits();
 
+        TFileData* GetFileDataByID(std::size_t);
+
         void Resize(std::size_t, std::size_t);
 
         void ReallocX();
         void ReallocY();
+        void Realloc();
 
         void WriteToFile(std::string&);
         void Print();
 
-        std::size_t AddX(std::string&);
-        std::size_t AddY(std::string&);
-        std::size_t Add(std::string&, std::string&);
+        std::size_t Add(std::string&, int, TFileData&);
 
         TArray<std::string*> GetFileList();
 
-        unsigned char BitSet(std::string&, std::string&, unsigned char);
         unsigned char BitSet(std::size_t, std::size_t, unsigned char);
         
         unsigned char BitGet(std::string&, std::string&);
         unsigned char BitGet(std::size_t, std::size_t);
 
-        TBitTable& operator= (const TBitTable& table) {
+        TBitIndex& operator= (const TBitIndex& table) {
             
-            for(std::size_t i = 0; i < this->sizeY; ++i) {
-                delete[] this->bitStream[i];
+            for(std::size_t i = 0; i < this->nTokens; ++i) {
+                delete[] this->bitTable[i];
             }
-            delete[] this->bitStream;
+            delete[] this->bitTable;
             
 
-            this->allocSizeX = table.allocSizeX;
-            this->allocSizeY = table.allocSizeY;
-            this->sizeX = table.sizeX;
-            this->sizeY = table.sizeY;
+            this->allocBytes = table.allocBytes;
+            this->allocTokens = table.allocTokens;
+            this->nBytes = table.nBytes;
+            this->nTokens = table.nTokens;
             this->nBits = table.nBits;
 
-            this->bitStream = new char*[this->allocSizeY];
-            if(this->bitStream == nullptr) {
-                std::cerr << "ERROR: malloc at TBitTable::TBitTable(const TBitTable&)!" << std::endl;
+            this->bitTable = new char*[this->allocTokens];
+            if(this->bitTable == nullptr) {
+                std::cerr << "ERROR: malloc at TBitIndex::TBitIndex(const TBitIndex&)!" << std::endl;
             }
-            for(std::size_t i = 0; i < this->sizeY; ++i) {
-                this->bitStream[i] = new char[this->allocSizeX];
+            for(std::size_t i = 0; i < this->nTokens; ++i) {
+                this->bitTable[i] = new char[this->allocBytes];
             }
 
-            for(std::size_t i = 0; i < this->sizeY; ++i) {
-                for(std::size_t j = 0; j < this->sizeX; ++j) {
-                    this->bitStream[i][j] = table.bitStream[i][j];
+            for(std::size_t i = 0; i < this->nTokens; ++i) {
+                for(std::size_t j = 0; j < this->nBytes; ++j) {
+                    this->bitTable[i][j] = table.bitTable[i][j];
                 }
             }
 

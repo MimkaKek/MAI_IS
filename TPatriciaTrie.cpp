@@ -13,9 +13,29 @@ TPatriciaTrie<T>::TPatriciaTrie() {
         std::cout << "ERROR: bad allocation!" << std::endl;
         exit(0);
     }
-    head->key = std::string();
+    head->key = "";
     head->key.reserve(256);
     size = 0;
+}
+
+//----------------------------------------------------------------------------
+
+template <class T>
+TPatriciaTrie<T>::TPatriciaTrie(TPatriciaTrie<T>& toCopy) {
+    head = new TPatriciaTrieItem<T>();
+    if(!head) {
+        std::cout << "ERROR: bad allocation!" << std::endl;
+        exit(0);
+    }
+    head->key = "";
+    head->key.reserve(256);
+    size = 0;
+
+    TArray<TPatriciaTrieItem<T>*> items = toCopy.ItemList();
+
+    for(std::size_t i = 0; i < items.Size(); ++i) {
+        this->Insert(items[i]->key, items[i]->data);
+    }
 }
 
 //----------------------------------------------------------------------------
@@ -26,13 +46,13 @@ TPatriciaTrie<T>::~TPatriciaTrie() {
 
 //----------------------------------------------------------------------------
 template <class T>
-std::size_t TPatriciaTrie<T>::Size() {
+std::size_t TPatriciaTrie<T>::Size() const {
     return size;
 }
 
 //----------------------------------------------------------------------------
 template <class T>
-TPatriciaTrieItem<T>* TPatriciaTrie<T>::Insert(std::string& key, T data) {
+TPatriciaTrieItem<T>* TPatriciaTrie<T>::Insert(std::string& key, T& data) {
     
     int                     bitIndex;
     TPatriciaTrieItem<T>*   tmp;
@@ -78,33 +98,37 @@ TPatriciaTrieItem<T>* TPatriciaTrie<T>::Insert(std::string& key, T data) {
     return newNode;
     
 }
-
 //----------------------------------------------------------------------------
 template <class T>
-void TPatriciaTrie<T>::Print(TPatriciaTrieItem<T>* root, int deep) {
+void TPatriciaTrie<T>::Print() const {
+    return this->Print(this->head, 0);
+}
+//----------------------------------------------------------------------------
+template <class T>
+void TPatriciaTrie<T>::Print(TPatriciaTrieItem<T>* root, int deep) const {
     
     int pDeep;
     
     if ( root->index < root->left->index ) {
         Print(root->left, deep + 1);
     }
-    else {
-        for(int i = 0; i < deep + 1; ++i) {
-            std::cout << "|\t";
-        }
-        std::cout << root->left->data;
-        pDeep = deep + 1;
-        while(pDeep < MAX_DEEP) {
-            ++pDeep;
-            std::cout << "\t|";
-        }
-        std::cout << std::endl;
-    }
+    // else {
+    //     for(int i = 0; i < deep + 1; ++i) {
+    //         std::cout << "|\t";
+    //     }
+    //     std::cout << root->left->data;
+    //     pDeep = deep + 1;
+    //     while(pDeep < MAX_DEEP) {
+    //         ++pDeep;
+    //         std::cout << "\t|";
+    //     }
+    //     std::cout << std::endl;
+    // }
     
     for(int i = 0; i < deep; ++i) {
         std::cout << "|\t";
     }
-    std::cout << root->data << ':' << root->index;
+    std::cout << root->key << ':' << root->data;
     pDeep = deep;
     while(pDeep < MAX_DEEP) {
         ++pDeep;
@@ -115,23 +139,23 @@ void TPatriciaTrie<T>::Print(TPatriciaTrieItem<T>* root, int deep) {
     if ( root->index < root->right->index ) {
         Print(root->right, deep + 1);
     }
-    else {
-        for(int i = 0; i < deep + 1; ++i) {
-            std::cout << "|\t";
-        }
-        std::cout << root->right->data;
-        pDeep = deep + 1;
-        while(pDeep < MAX_DEEP) {
-            ++pDeep;
-            std::cout << "\t|";
-        }
-        std::cout << std::endl;
-    }
+    // else {
+    //     for(int i = 0; i < deep + 1; ++i) {
+    //         std::cout << "|\t";
+    //     }
+    //     std::cout << root->right->data;
+    //     pDeep = deep + 1;
+    //     while(pDeep < MAX_DEEP) {
+    //         ++pDeep;
+    //         std::cout << "\t|";
+    //     }
+    //     std::cout << std::endl;
+    // }
 }
 
 //----------------------------------------------------------------------------
 template <class T>
-bool TPatriciaTrie<T>::SaveTrieBefore(TPatriciaTrieItem<T>* root, std::ofstream* file) {
+bool TPatriciaTrie<T>::SaveTrieBefore(TPatriciaTrieItem<T>* root, std::ofstream* file) const {
     
     int length = 0;
     
@@ -163,7 +187,7 @@ bool TPatriciaTrie<T>::SaveTrieBefore(TPatriciaTrieItem<T>* root, std::ofstream*
 template <class T>
 void TPatriciaTrie<T>::LoadTrieBefore(std::string& key, std::ifstream* file) {
     
-    T data = 0;
+    T data = T();
     int length = 0;
     char buffer[256];
 
@@ -181,7 +205,7 @@ void TPatriciaTrie<T>::LoadTrieBefore(std::string& key, std::ifstream* file) {
 //----------------------------------------------------------------------------
 
 template <class T>
-bool TPatriciaTrie<T>::SaveTrieCurrent(TPatriciaTrieItem<T>* root, std::ofstream* file) {
+bool TPatriciaTrie<T>::SaveTrieCurrent(TPatriciaTrieItem<T>* root, std::ofstream* file) const {
     
     TPatriciaTrie<T>::TPack   pack;
     char                      check;
@@ -312,7 +336,7 @@ void TPatriciaTrie<T>::LoadTrieCurrent(std::string& key, TPatriciaTrieItem<T>* r
 
 //----------------------------------------------------------------------------
 template <class T>
-T* TPatriciaTrie<T>::Lookup(std::string& k) {
+T* TPatriciaTrie<T>::Lookup(std::string& k) const {
 
     TPatriciaTrieItem<T>* node = LookupNode(k);
 
@@ -326,7 +350,7 @@ T* TPatriciaTrie<T>::Lookup(std::string& k) {
 
 //----------------------------------------------------------------------------
 template <class T>
-TPatriciaTrieItem<T>* TPatriciaTrie<T>::LookupNode(std::string& key) {
+TPatriciaTrieItem<T>* TPatriciaTrie<T>::LookupNode(std::string& key) const {
     
     TPatriciaTrieItem<T>*   prev = head;
     TPatriciaTrieItem<T>*   directNode = head->right;
@@ -438,15 +462,17 @@ void TPatriciaTrie<T>::RecursiveRemove(TPatriciaTrieItem<T>* root) {
 //----------------------------------------------------------------------------
 template <class T>
 void TPatriciaTrie<T>::ClearTrie() {
-    RecursiveRemove(head->right);
-    head->right = head;
-    size = 0;
+    if (head->right != head) {
+        RecursiveRemove(head->right);
+        head->right = head;
+        size = 0;
+    }
     return;
 }
 
 //----------------------------------------------------------------------------
 template <class T>
-bool TPatriciaTrie<T>::Empty() {
+bool TPatriciaTrie<T>::Empty() const {
     if( head->right == head ) {
         return true;
     }
@@ -456,7 +482,7 @@ bool TPatriciaTrie<T>::Empty() {
 }
 //----------------------------------------------------------------------------
 template <class T>
-int TPatriciaTrie<T>::BitGet(const char* bit_stream, int n) {
+int TPatriciaTrie<T>::BitGet(const char* bit_stream, int n) const {
     if (n == -1) {
         return 2;
     }
@@ -466,7 +492,7 @@ int TPatriciaTrie<T>::BitGet(const char* bit_stream, int n) {
 
 //----------------------------------------------------------------------------
 template <class T>
-bool TPatriciaTrie<T>::KeyCompare(const char* key1, const char* key2) {
+bool TPatriciaTrie<T>::KeyCompare(const char* key1, const char* key2) const {
     if (!key1 || !key2) {
         return false;
     }
@@ -475,7 +501,7 @@ bool TPatriciaTrie<T>::KeyCompare(const char* key1, const char* key2) {
 
 //----------------------------------------------------------------------------
 template <class T>
-int TPatriciaTrie<T>::BitFirstDifferent(const char* key1, const char* key2) {
+int TPatriciaTrie<T>::BitFirstDifferent(const char* key1, const char* key2) const {
     
     int         posChar = 0;
     int         posBit = 0;
@@ -487,15 +513,42 @@ int TPatriciaTrie<T>::BitFirstDifferent(const char* key1, const char* key2) {
     while ( (key1[posChar] == key2[posChar]) && (key1[posChar] != 0) && (key2[posChar] != 0) ) {
         posChar++;
     }
-    while (BitGet(&key1[posChar], posBit) == BitGet(&key2[posChar], posBit)) {
+    while (BitGet(key1 + posChar, posBit) == BitGet(key2 + posChar, posBit)) {
         posBit++;
     }
     
     return ((posChar << 3) + posBit);
 }
+
 //----------------------------------------------------------------------------
 template <class T>
-TArray<std::string*> TPatriciaTrie<T>::KeyList() {
+TArray<TPatriciaTrieItem<T>*> TPatriciaTrie<T>::ItemList() const {
+
+    TArray<TPatriciaTrieItem<T>*> list;
+    TArray<TPatriciaTrieItem<T>*> toCheck;
+    toCheck.Push(this->head->right);
+
+    while(!toCheck.IsEmpty()) {
+
+        TPatriciaTrieItem<T>* node = toCheck.Pop();
+
+        if ( node->index < node->left->index ) {
+            toCheck.Push(node->left);
+        }
+
+        if ( node->index < node->right->index ) {
+            toCheck.Push(node->right);
+        }
+        
+        list.Push(node);
+    }
+    
+    return TArray<TPatriciaTrieItem<T>*>(list);
+}
+
+//----------------------------------------------------------------------------
+template <class T>
+TArray<std::string*> TPatriciaTrie<T>::KeyList() const {
 
     TArray<std::string*> list;
     TArray<TPatriciaTrieItem<T>*> toCheck;
@@ -521,7 +574,7 @@ TArray<std::string*> TPatriciaTrie<T>::KeyList() {
 
 //----------------------------------------------------------------------------
 template <class T>
-TPatriciaTrieItem<T>* TPatriciaTrie<T>::GetHead() {
+TPatriciaTrieItem<T>* TPatriciaTrie<T>::GetHead() const {
     return head;
 }
 
@@ -568,3 +621,11 @@ void TPatriciaTrie<T>::KeyCopy(TPatriciaTrieItem<T>* src, TPatriciaTrieItem<T>* 
 
 template class TPatriciaTrie<std::size_t>;
 template class TPatriciaTrie<std::string>;
+template class TPatriciaTrie<int>;
+
+#include "TFileData.hpp"
+template class TPatriciaTrie<TFileData>;
+
+#include "TTokenData.hpp"
+template class TPatriciaTrie<TTokenData>;
+

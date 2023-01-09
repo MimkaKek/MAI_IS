@@ -4,11 +4,14 @@
 #include <fstream>
 #include <filesystem>
 #include <cstring>
+#include <chrono>
 
 #include "TArray.hpp"
 #include "TFindedData.hpp"
 #include "TBitTable.hpp"
 #include "TSyntaxTree.hpp"
+#include "TRevIndex.hpp"
+#include "TFileData.hpp"
 
 namespace fs = std::filesystem;
 
@@ -17,26 +20,26 @@ class TSearch {
         std::string              root;
         std::string              search;
 
-        TBitTable                index;
+        TBitIndex                bitIndex;
         TSyntaxTree              tree;
+        TRevIndex                revIndex;
 
         void _BoolParse();
 
+        TArray<TFileData*> _RevSearch(std::string);
+        TArray<TFileData*> _BitSearch(std::string);
+
     public:
 
-        TSearch();
+        enum TYPE { REV_INDEX, BIT_INDEX };
 
+        TSearch();
+        TSearch(std::string&);
         ~TSearch();
 
-        void LoadIndex();
+        void LoadIndex(TYPE);
 
-        TArray<std::string> BoolParse(std::string);
-
-        TArray<std::string> StupidSearch(std::string);
-
-        TArray<std::string> BooleanSearch(std::string);
+        TArray<TFileData*> Search(std::string, TYPE);
 };
-
-const std::string DOC_PATH = "./ruwiki/data";
 
 #endif

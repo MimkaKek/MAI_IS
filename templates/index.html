@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            input.text {
+                width: 80%;
+            }
+            input.submit {
+                width: 100px;
+            }
+        </style>
+    </head>
+    <body>
+
+        <h1>Поиск</h1>
+
+        <form action="" method="post" name="search">
+            <p>
+                Строка для поиска:<br>
+                {{form.search(size=80)}}<br>
+            </p>
+            <p><input type="submit" value="Искать"></p>
+        </form>
+
+    </body>
+</html>

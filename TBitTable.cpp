@@ -1,240 +1,246 @@
 #include "TBitTable.hpp"
 
-std::size_t TBitTable::BitsToBytes(std::size_t nBits) {
+std::size_t TBitIndex::BitsToBytes(std::size_t nBits) {
     return ((nBits & 0x7) != 0) ? (nBits >> 3) + 1 : (nBits >> 3);
 }
 
-TBitTable::TBitTable() {
+TBitIndex::TBitIndex() {
     this->nBits = 0;
 
-    this->sizeX = 0;
-    this->sizeY = 0;
+    this->nBytes = 0;
+    this->nTokens = 0;
     
-    this->allocSizeX = 0;
-    this->allocSizeY = 0;
+    this->allocBytes = 0;
+    this->allocTokens = 0;
 
-    this->bitStream = 0;
+    this->bitTable = nullptr;
 }
 
-TBitTable::TBitTable(std::size_t nTokens, std::size_t nFilenames) {
+TBitIndex::TBitIndex(std::size_t nTokens, std::size_t nFilenames) {
     this->nBits = nFilenames;
 
-    this->sizeX = BitsToBytes(nFilenames);
-    this->sizeY = nTokens;
+    this->nBytes = BitsToBytes(nFilenames);
+    this->nTokens = nTokens;
     
-    for(this->allocSizeX = 1; this->allocSizeX <= this->sizeX; this->allocSizeX *= 2);
-    for(this->allocSizeY = 1; this->allocSizeY <= this->sizeY; this->allocSizeY *= 2);
+    for(this->allocBytes = 1; this->allocBytes <= this->nBytes; this->allocBytes *= 2);
+    for(this->allocTokens = 1; this->allocTokens <= this->nTokens; this->allocTokens *= 2);
 
-    this->bitStream = new char*[this->allocSizeY];
-    for(std::size_t i = 0; i < this->allocSizeY; ++i) {
-        this->bitStream[i] = new char[this->allocSizeX];
+    this->bitTable = new char*[this->allocTokens];
+    for(std::size_t i = 0; i < this->allocTokens; ++i) {
+        this->bitTable[i] = new char[this->allocBytes];
     }
 }
 
-TBitTable::TBitTable(const TBitTable& table) {
+TBitIndex::TBitIndex(const TBitIndex& table) {
     
-    this->allocSizeX = table.allocSizeX;
-    this->allocSizeY = table.allocSizeY;
-    this->sizeX = table.sizeX;
-    this->sizeY = table.sizeY;
+    this->allocBytes = table.allocBytes;
+    this->allocTokens = table.allocTokens;
+    this->nBytes = table.nBytes;
+    this->nTokens = table.nTokens;
     this->nBits = table.nBits;
 
-    this->bitStream = new char*[this->allocSizeY];
-    if(this->bitStream == nullptr) {
+    this->bitTable = new char*[this->allocTokens];
+    if(this->bitTable == nullptr) {
         std::cerr << "ERROR: malloc at TBitTable::TBitTable(const TBitTable&)!" << std::endl;
     }
-    for(std::size_t i = 0; i < this->sizeY; ++i) {
-        this->bitStream[i] = new char[this->allocSizeX];
+    for(std::size_t i = 0; i < this->nTokens; ++i) {
+        this->bitTable[i] = new char[this->allocBytes];
     }
 
-    for(std::size_t i = 0; i < this->sizeY; ++i) {
-        for(std::size_t j = 0; j < this->sizeX; ++j) {
-            this->bitStream[i][j] = table.bitStream[i][j];
+    for(std::size_t i = 0; i < this->nTokens; ++i) {
+        for(std::size_t j = 0; j < this->nBytes; ++j) {
+            this->bitTable[i][j] = table.bitTable[i][j];
         }
     }
 }
 
-TBitTable::~TBitTable() {
-    for(std::size_t i = 0; i < this->sizeY; ++i) {
-        delete[] this->bitStream[i];
+TBitIndex::~TBitIndex() {
+    if(this->bitTable) {
+        for(std::size_t i = 0; i < this->allocTokens; ++i) {
+            delete[] this->bitTable[i];
+        }
+        delete[] this->bitTable;
     }
-    delete[] this->bitStream;
 }
 
-void TBitTable::Clear() {
-    if(this->bitStream) {
-        for(std::size_t i = 0; i < this->sizeY; ++i) {
-            if (this->bitStream[i]) {
-                delete[] this->bitStream[i];
+void TBitIndex::Clear() {
+    if(this->bitTable) {
+        for(std::size_t i = 0; i < this->allocTokens; ++i) {
+            if (this->bitTable[i]) {
+                delete[] this->bitTable[i];
             }
         }
-        delete[] this->bitStream;
+        delete[] this->bitTable;
     }
 
     this->nBits = 0;
 
-    this->sizeX = 0;
-    this->sizeY = 0;
+    this->nBytes = 0;
+    this->nTokens = 0;
     
-    this->allocSizeX = 0;
-    this->allocSizeY = 0;
+    this->allocBytes = 0;
+    this->allocTokens = 0;
 
-    this->bitStream = nullptr;
+    this->bitTable = nullptr;
 
 }
 
-void TBitTable::Init(std::size_t nTokens, std::size_t nFilenames) {
+void TBitIndex::Init(std::size_t nTokens, std::size_t nFilenames) {
 
     this->Clear();
 
     this->nBits = nFilenames;
 
-    this->sizeX = BitsToBytes(nFilenames);
-    this->sizeY = nTokens;
+    this->nBytes = BitsToBytes(nFilenames);
+    this->nTokens = nTokens;
     
-    for(this->allocSizeX = 1; this->allocSizeX <= this->sizeX; this->allocSizeX *= 2);
-    for(this->allocSizeY = 1; this->allocSizeY <= this->sizeY; this->allocSizeY *= 2);
+    for(this->allocBytes = 1; this->allocBytes <= this->nBytes; this->allocBytes *= 2);
+    for(this->allocTokens = 1; this->allocTokens <= this->nTokens; this->allocTokens *= 2);
 
-    this->bitStream = new char*[this->allocSizeY];
-    for(std::size_t i = 0; i < this->allocSizeY; ++i) {
-        this->bitStream[i] = new char[this->allocSizeX];
+    this->bitTable = new char*[this->allocTokens];
+    for(std::size_t i = 0; i < this->allocTokens; ++i) {
+        this->bitTable[i] = new char[this->allocBytes];
     }
     return;
 }
 
-std::size_t TBitTable::SizeInBytes() {
-    return this->sizeX;
+std::size_t TBitIndex::SizeInBytes() {
+    return this->nBytes;
 }
 
-std::size_t TBitTable::SizeInBits() {
+std::size_t TBitIndex::SizeInBits() {
     return this->nBits;
 }
 
-void TBitTable::Resize(std::size_t nTokens, std::size_t nFilenames) {
+void TBitIndex::Realloc() {
 
-    std::size_t nSizeX = BitsToBytes(nFilenames);
-    std::size_t nSizeY = nTokens;
-    std::size_t nBits  = nFilenames;
-    std::size_t nAllocSizeX = 1;
-    std::size_t nAllocSizeY = 1;
-    for(;nAllocSizeX <= nSizeX; nAllocSizeX *= 2);
-    for(;nAllocSizeY <= nSizeY; nAllocSizeY *= 2);
-    char** tmp = new char*[nAllocSizeY];
-
-    std::size_t minSizeX = this->sizeX > nSizeX ? nSizeX : this->sizeX;
-    std::size_t minSizeY = this->sizeY > nSizeY ? nSizeY : this->sizeY;
-    for (std::size_t i = 0; i < minSizeY; ++i) {
-        for (std::size_t j = 0; j < minSizeX; ++j) {
-            tmp[i] = this->bitStream[i];
-        }
+    if (this->nBytes >= (this->allocBytes / 2)) {
+        this->ReallocX();
     }
 
-    this->Clear();
-
-    this->allocSizeX = nAllocSizeX;
-    this->allocSizeY = nAllocSizeY;
-
-    this->nBits = nBits;
-
-    this->sizeX = nSizeX;
-    this->sizeY = nSizeY;
-
-    this->bitStream = tmp;
-
-    return;
+    if (this->nTokens >= (this->allocTokens / 2)) {
+        this->ReallocY();
+    }
 }
 
-void TBitTable::ReallocY() {
-    char** newAlloc = new char*[this->allocSizeY];
-    if(newAlloc == nullptr) {
+void TBitIndex::ReallocY() {
+
+    std::size_t prevAllocTokens = this->allocTokens;
+    this->allocTokens = (this->allocTokens == 0) ? 2 : this->allocTokens * 2;
+
+    char** newBitTable = new char*[this->allocTokens];
+    if(newBitTable == nullptr) {
         std::cerr << "ERROR: new at TBitTable::ReallocY()!" << std::endl;
     }
-    if(this->bitStream != nullptr) {
-        for(std::size_t i = 0; i < this->sizeY; ++i) {
-            newAlloc[i] = this->bitStream[i];
-        }
-        for(std::size_t i = this->sizeY; i < this->allocSizeY; ++i) {
-            newAlloc[i] = new char[this->allocSizeX];
-            if(newAlloc[i] == nullptr) {
+
+    if(this->bitTable == nullptr) {
+        for(std::size_t i = 0; i < this->allocTokens; ++i) {
+            
+            newBitTable[i] = new char[this->allocBytes];
+            if(newBitTable[i] == nullptr) {
                 std::cerr << "ERROR: new at TBitTable::ReallocY()!" << std::endl;
+            }
+
+            for(std::size_t j = 0; j < this->allocBytes; ++j) {
+                newBitTable[i][j] = 0;
+            }
+        }
+    }
+    else {
+        
+        for(std::size_t i = 0; i < prevAllocTokens; ++i) {
+            newBitTable[i] = this->bitTable[i];
+        }
+        for(std::size_t i = prevAllocTokens; i < this->allocTokens; ++i) {
+            
+            newBitTable[i] = new char[this->allocBytes];
+            if(newBitTable[i] == nullptr) {
+                std::cerr << "ERROR: new at TBitTable::ReallocY()!" << std::endl;
+            }
+
+            for(std::size_t j = 0; j < this->allocBytes; ++j) {
+                newBitTable[i][j] = 0;
             }
         }
 
-        delete[] this->bitStream;
+        delete[] this->bitTable;
     }
-    else {
-        newAlloc[0] = new char[this->allocSizeX];
-        newAlloc[1] = new char[this->allocSizeX];
-        if(newAlloc[0] == nullptr || newAlloc[1] == nullptr) {
-            std::cerr << "ERROR: new at TBitTable::ReallocY()!" << std::endl;
-        }
-    }
-    this->bitStream = newAlloc;
+
+    this->bitTable = newBitTable;
     return;
 }
 
-void TBitTable::ReallocX() {
-    for(std::size_t i = 0; i < this->sizeY; ++i) {
-        char* newAlloc = new char[this->allocSizeX]();
-        if(newAlloc == nullptr) {
+void TBitIndex::ReallocX() {
+
+    std::size_t prevAllocBytes  = this->allocBytes;
+    this->allocBytes            = (this->allocBytes == 0) ? 2 : this->allocBytes * 2;
+
+    if(this->bitTable == nullptr) {
+        return;
+    }
+    
+    for(std::size_t i = 0; i < this->allocTokens; ++i) {
+        char* newLine = new char[this->allocBytes];
+        if(newLine == nullptr) {
             std::cerr << "ERROR: new at TArray::reallocArray()!" << std::endl;
         }
 
-        for(std::size_t j = 0; j < this->sizeX; ++j) {
-            newAlloc[j] = this->bitStream[i][j];
+        for(std::size_t j = 0; j < prevAllocBytes; ++j) {
+            newLine[j] = this->bitTable[i][j];
         }
-        
-        delete[] this->bitStream[i];
-        
-        this->bitStream[i] = newAlloc;
+        for(std::size_t j = prevAllocBytes; j < this->allocBytes; ++j) {
+            newLine[j] = 0;
+        }
+
+        delete[] this->bitTable[i];
+        this->bitTable[i] = newLine;
     }
     
     return;
 }
 
-std::size_t TBitTable::Add(std::string& token, std::string& filename) {
+TFileData* TBitIndex::GetFileDataByID(std::size_t id) {
+    std::string strID = std::to_string(id);
+    return this->iDToFiledata.Lookup(strID);
+}
+
+std::size_t TBitIndex::Add(std::string& token, int count, TFileData& filedata) {
 
     std::size_t i = 0;
     std::size_t j = 0;
 
-    if(this->filenames.Insert(filename, this->nBits) != nullptr) {
+    if(this->filenameToID.Insert(filedata.filepath, this->nBits) != nullptr) {
         j = this->nBits;
+        std::string id = std::to_string(this->nBits);
+        this->iDToFiledata.Insert(id, filedata);
         ++(this->nBits);
-        this->sizeX = BitsToBytes(this->nBits);
+        this->nBytes = BitsToBytes(this->nBits);
     }
     else {
-        j = *(this->filenames.Lookup(filename));
+        j = *(this->filenameToID.Lookup(filedata.filepath));
     }
 
-    if(this->tokens.Insert(token, this->sizeY) != nullptr) {
-        i = this->sizeY;
-        ++(this->sizeY);
+    if(this->tokensToID.Insert(token, this->nTokens) != nullptr) {
+        i = this->nTokens;
+        ++(this->nTokens);
     }
     else {
-        i = *(this->tokens.Lookup(token));
+        i = *(this->tokensToID.Lookup(token));
     }
 
-    if (this->sizeY >= (this->allocSizeY / 2)) {
-        this->allocSizeY = (this->allocSizeY == 0) ? 2 : this->allocSizeY * 2;
-        this->ReallocY();
-    }
-
-    if (this->sizeX >= (this->allocSizeX / 2)) {
-        this->allocSizeX = (this->allocSizeX == 0) ? 2 : this->allocSizeX * 2;
-        this->ReallocX();
-    }
+    this->Realloc();
 
     this->BitSet(i, j, 1);
     return 0;
 }
 
-void TBitTable::Print() {
-    TArray<std::string*> tokenList = this->tokens.KeyList();
-    TArray<std::string*> fileList  = this->filenames.KeyList();
+void TBitIndex::Print() {
+    TArray<std::string*> tokenList = this->tokensToID.KeyList();
+    TArray<std::string*> fileList  = this->filenameToID.KeyList();
     for(std::size_t i = 0; i < tokenList.Size(); ++i) {
         std::cout << "Token: " << *tokenList[i] << " | Table: ";
         for(std::size_t j = 0; j < fileList.Size(); ++j) {
-            std::cout << (int) this->BitGet(*tokenList[i], *fileList[j]);
+            std::cout << (int) this->BitGet(i, j);
             if (j % 8 == 0 && j > 0) {
                 std::cout << " ";
             }
@@ -243,16 +249,16 @@ void TBitTable::Print() {
     }
 }
 
-void TBitTable::WriteToFile(std::string& filename) {
+void TBitIndex::WriteToFile(std::string& filename) {
 
     std::fstream file(filename, std::ios::out);
 
-    TArray<std::string*> tokenList = this->tokens.KeyList();
-    TArray<std::string*> fileList = this->filenames.KeyList();
+    TArray<std::string*> tokenList = this->tokensToID.KeyList();
+    TArray<std::string*> fileList = this->filenameToID.KeyList();
     for(std::size_t i = 0; i < tokenList.Size(); ++i) {
         file << "| Token: " << *tokenList[i] << std::endl << "| Table:";
         for(std::size_t j = 0; j < fileList.Size(); ++j) {
-            file << (int) this->BitGet(*tokenList[i], *fileList[j]);
+            file << (int) this->BitGet(i, j);
             if (j % 8 == 0 && j > 0) {
                 file << " ";
             }
@@ -272,65 +278,41 @@ void TBitTable::WriteToFile(std::string& filename) {
     return;
 }
 
-TArray<std::string*> TBitTable::GetFileList() {
-    return TArray(this->filenames.KeyList());
+TArray<std::string*> TBitIndex::GetFileList() {
+    return TArray(this->filenameToID.KeyList());
 }
 
-unsigned char TBitTable::BitGet(std::string& token, std::string& filename) {
-
-    std::size_t* tmpI = this->tokens.Lookup(token);
-    std::size_t* tmpJ = this->filenames.Lookup(filename);
-
-    if(tmpI == nullptr || tmpJ == nullptr) {
+unsigned char TBitIndex::BitGet(std::size_t i, std::size_t j) {
+    if (j >= this->nBits || i >= this->nTokens) {
+        std::cerr << "ERROR: out of border in TBitIndex::BitGet(std::size_t, std::size_t)!" << std::endl;
         return 2;
     }
+    int k = (j & 0x7);
+    return ( (*(this->bitTable[i] + (j >> 3))) >> k) & 0x01;
+}
+
+unsigned char TBitIndex::BitGet(std::string& token, std::string& filename) {
     
-    std::size_t i = *tmpI;
-    std::size_t j = *tmpJ;
+    std::size_t i = *(this->tokensToID.Lookup(token));
+    std::size_t j = *(this->filenameToID.Lookup(filename));
 
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitGet(std::string, std::string)!" << std::endl;
-        return 2;
-    }
-    int k = (j & 0x7);
-    return ( (*(this->bitStream[i] + (j >> 3))) >> k) & 0x01;
+    return this->BitGet(i, j);
 }
 
-unsigned char TBitTable::BitSet(std::string& token, std::string& filename, unsigned char value) {
-
-    std::size_t i = *(this->tokens.Lookup(token));
-    std::size_t j = *(this->filenames.Lookup(filename));
-
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitSet(std::string, std::string, unsigned char)!" << std::endl;
+unsigned char TBitIndex::BitSet(std::size_t i, std::size_t j, unsigned char value) {
+    if (j >= this->nBits || i >= this->nTokens) {
+        std::cerr << "ERROR: out of border in TBitIndex::BitSet(std::size_t, std::size_t, unsigned char)!" << std::endl;
         return 2;
     }
-    int k = (j & 0x7);
-    value = value ? 0x80 : 0x0;
-    *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) | value >> k;
-    return 0;
-}
 
-unsigned char TBitTable::BitGet(std::size_t i, std::size_t j) {
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitGet(std::size_t, std::size_t)!" << std::endl;
-        return 2;
-    }
     int k = (j & 0x7);
-    return ( (*(this->bitStream[i] + (j >> 3))) >> k) & 0x01;
-}
+    int byte = j >> 3;
 
-unsigned char TBitTable::BitSet(std::size_t i, std::size_t j, unsigned char value) {
-    if (j >= this->nBits || i >= this->sizeY) {
-        std::cerr << "ERROR: out of border in TBitTable::BitSet(std::size_t, std::size_t, unsigned char)!" << std::endl;
-        return 2;
-    }
-    int k = (j & 0x7);
     if (value) {
-        *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) | 0x01 << k;
+        *(this->bitTable[i] + byte) = *(this->bitTable[i] + byte) | 0x01 << k;
     }
     else {
-        *(this->bitStream[i] + (j >> 3)) = *(this->bitStream[i] + (j >> 3)) & 0x01 << k;
+        *(this->bitTable[i] + byte) = *(this->bitTable[i] + byte) & ~(0x01 << k);
     }
     
     return 0;

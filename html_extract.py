@@ -1,8 +1,8 @@
 from bs4 import BeautifulSoup
-from datetime import datetime
 import time
 import os
 import json
+from sys import argv
 
 class HTMLExtractor:
     
@@ -10,7 +10,7 @@ class HTMLExtractor:
         
         self.buffer          = ""
 
-        self.BASE_DIR        = "ruwiki/"
+        self.BASE_DIR        = "./ruwiki/"
         self.pathToSave      = "backup.json"
 
         self.IGNORE_TITLE    = ["Категория:", "Файл:", "Шаблон:", "Википедия:", "Проект:"]
@@ -34,8 +34,6 @@ class HTMLExtractor:
                 return
 
         htmlTemplate = "<!DOCTYPE html> <html> <body> <h1>" + title + "</h1> <p>" + text + "</p> </body> </html>"
-        if not os.path.exists(self.BASE_DIR):
-            os.makedirs(self.BASE_DIR)
         with open(self.BASE_DIR + str(name) + ".html", "w") as file:
             file.write(htmlTemplate)
         
@@ -50,6 +48,9 @@ class HTMLExtractor:
         return title.text, text.text
 
     def beforeStart(self):
+        if not os.path.exists(self.BASE_DIR):
+            os.makedirs(self.BASE_DIR)
+
         if os.path.exists(self.pathToSave):
             with open(self.pathToSave, "r") as backupFile:
                 data = json.load(backupFile)
@@ -58,57 +59,58 @@ class HTMLExtractor:
                 self.total_lines = data["total_lines"]
                 self.buffer      = data["buffer"]
 
-    def start(self):
+    def start(self, files):
 
         self.beforeStart()
 
         get_page_segment = False
-
-        with open("ruwiki.xml", "r") as xmlf:
-            try:
-                for line in xmlf:
-                    if self.current_line < self.total_lines:
-                        print("\r> Skip line: " + str(self.current_line), end="")
+        for file in files:
+            with open(file, "r") as xmlf:
+                try:
+                    for line in xmlf:
+                        if self.current_line < self.total_lines:
+                            print("\r> Skip line: " + str(self.current_line), end="")
+                            self.current_line += 1
+                            continue
+                        if "<page>" in line:
+                            get_page_segment = True
+                        if get_page_segment:
+                            self.buffer += line
+                        if "</page>" in line:
+                            get_page_segment = False
+                            delta_time = time.gmtime(time.time() - self.begin_time)
+                            self.total_pages += 1
+                            print("\33[2K\r| Total time: {hour:02d}:{min:02d}:{sec:02d} | Total pages: {total_p:10d} | Total HTML-docs: {total_h:10d} | Total lines: {total_l:15d} |".format(hour=delta_time.tm_hour, min=delta_time.tm_min, sec=delta_time.tm_sec, total_p=self.total_pages, total_h=self.total_html, total_l=self.total_lines), end="")
+                            title, text = self.parseXMLSegment(self.buffer)
+                            self.createHTML(title, text, self.total_html)
+                            self.buffer = ""
+                        
                         self.current_line += 1
-                        continue
-                    if "<page>" in line:
-                        get_page_segment = True
-                    if get_page_segment:
-                        self.buffer += line
-                    if "</page>" in line:
-                        get_page_segment = False
-                        delta_time = time.gmtime(time.time() - self.begin_time)
-                        tm_hour = str(delta_time.tm_hour) if delta_time.tm_hour > 9 else "0" + str(delta_time.tm_hour)
-                        tm_min = str(delta_time.tm_min) if delta_time.tm_min > 9 else "0" + str(delta_time.tm_min)
-                        tm_sec = str(delta_time.tm_sec) if delta_time.tm_sec > 9 else "0" + str(delta_time.tm_sec)
-                        print("\r> | Total time: " + tm_hour + ":" + tm_min + ":" + tm_sec + " | Total pages: " + str(self.total_pages) + " | Total HTML-docs: " + str(self.total_html) + " | Total lines: " + str(self.total_lines) + " |", end="")
-                        self.total_pages += 1
-                        title, text = self.parseXMLSegment(self.buffer)
-                        self.createHTML(title, text, self.total_pages)
-                        self.buffer = ""
-                    
-                    self.current_line += 1
-                    self.total_lines += 1
+                        self.total_lines += 1
 
-            except KeyboardInterrupt as e:
-                print("")
-                print("Stopped!")
-                print(e)
-                save = json.dumps(self.__dict__)
-                with open(self.pathToSave, "w") as backupFile:
-                    backupFile.write(save)
-                return 1
+                except KeyboardInterrupt as e:
+                    print("")
+                    print("Stopped!")
+                    print(e)
+                    save = json.dumps(self.__dict__)
+                    with open(self.pathToSave, "w") as backupFile:
+                        backupFile.write(save)
+                    return 1
 
-            except BaseException as e:
-                print("")
-                print("Error while getting document. Exit!")
-                print(e)
-                save = json.dumps(self.__dict__)
-                with open(self.pathToSave, "w") as backupFile:
-                    backupFile.write(save)
-                return 1
+                except BaseException as e:
+                    print("")
+                    print("Error while getting document. Exit!")
+                    print(e)
+                    save = json.dumps(self.__dict__)
+                    with open(self.pathToSave, "w") as backupFile:
+                        backupFile.write(save)
+                    return 1
 
-        print("Finished!\nTotal pages: " + str(self.total_pages) + "\nTotal html-files:" + str(self.total_html))
+        print("Finished!\nTotal pages: {total_p:10d}\nTotal html-files: {total_h:10d}\n".format(total_p=self.total_pages, total_h=self.total_html))
 
-extractor = HTMLExtractor()
-extractor.start()
+if __name__ == "__main__":
+    if len(argv) > 1:
+        extractor = HTMLExtractor()
+        extractor.start(argv[1:])
+    else:
+        print("Example usage: python " + argv[0] + " [dir_path...]")

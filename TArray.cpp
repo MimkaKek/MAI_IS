@@ -24,6 +24,21 @@ TArray<T>::TArray() {
 }
 
 template <typename T>
+TArray<T>::TArray(std::size_t size) {
+    this->data  = new T*[size];
+    if(this->data == nullptr) {
+        std::cerr << "ERROR: malloc at TArray::TArray()!" << std::endl;
+    }
+    for(std::size_t i = 0; i < size; ++i) {
+        this->data[i] = new T();
+    }
+
+    this->n = size;
+    this->s = 1;
+    for(;this->s < this->n; this->s *= 2);
+}
+
+template <typename T>
 TArray<T>::TArray(const TArray& arr) {
     this->n = arr.n;
     this->s = arr.s;
@@ -33,7 +48,7 @@ TArray<T>::TArray(const TArray& arr) {
         std::cerr << "ERROR: malloc at TArray::TArray(const TArray&)!" << std::endl;
     }
     for(std::size_t i = 0; i < this->n; ++i) {
-        this->data[i] = new T;
+        this->data[i] = new T();
         *this->data[i] = *arr.data[i];
     }
 }
@@ -159,10 +174,22 @@ T TArray<T>::Get(std::size_t i) {
     return *this->data[i];
 }
 
-template <class T> class TPatriciaTrieItem;
 template class TArray<std::string>;
 template class TArray<std::size_t>;
 template class TArray<TArray<std::size_t>>;
 template class TArray<std::string*>;
+
+#include "TPatriciaTrieItem.hpp"
 template class TArray<TPatriciaTrieItem<std::size_t>*>;
 template class TArray<TPatriciaTrieItem<std::string>*>;
+template class TArray<TPatriciaTrieItem<int>*>;
+
+#include "TFileData.hpp"
+template class TArray<TFileData>;
+template class TArray<TFileData*>;
+template class TArray<TPatriciaTrieItem<TFileData>*>;
+
+#include "TTokenData.hpp"
+template class TArray<TTokenData>;
+template class TArray<TTokenData*>;
+template class TArray<TPatriciaTrieItem<TTokenData>*>;

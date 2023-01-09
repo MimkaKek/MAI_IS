@@ -29,6 +29,7 @@ class TArray {
 
         TArray();
         TArray(const TArray&);
+        TArray(std::size_t);
         ~TArray();
 
         void            Clear();
@@ -52,7 +53,7 @@ class TArray {
             return *this->data[i]; 
         }
 
-        TArray&     operator= (const TArray& arr)    {
+        TArray<T>&     operator= (const TArray<T>& arr)    {
             
             for(std::size_t i = 0; i < this->n; ++i) {
                 delete this->data[i];

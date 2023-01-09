@@ -1,60 +1,14 @@
 #include "TSearch.hpp"
 
 TSearch::TSearch() {
-    this->root = DOC_PATH;
+    this->root = ".";
+};
+
+TSearch::TSearch(std::string& path) {
+    this->root = path;
 };
 
 TSearch::~TSearch() {};
-
-TArray<std::string> TSearch::BoolParse(std::string str) {
-
-    std::size_t size = str.length();
-    std::string buffer = "";
-    
-    TArray<std::string> tokens;
-
-    bool isQuote = false;
-
-    for(std::size_t i = 0; i < size; ++i) {
-        if(str[i] == '!' || str[i] == '(' || str[i] == ')') {
-            if(isQuote) {
-                buffer += str[i];
-            }
-            else {
-                
-                if (buffer != "") {
-                    tokens.Push(buffer);
-                    buffer = "";
-                }
-
-                buffer += str[i];
-                tokens.Push(buffer);
-                buffer = "";
-            }
-        }
-        else if(str[i] == '\"') {
-            buffer += str[i];
-            isQuote = (isQuote) ? false : true;
-        }
-        else if(str[i] != ' ') {
-            buffer += str[i];
-        }
-        else {
-            if(isQuote) {
-                buffer += str[i];
-            }
-            else {
-                tokens.Push(buffer);
-                buffer = "";
-            }
-        }
-    }
-    if (buffer != "") {
-        tokens.Push(buffer);
-    }
-
-    return tokens;
-};
 
 void TSearch::_BoolParse() {
 
@@ -104,38 +58,59 @@ void TSearch::_BoolParse() {
     return;
 };
 
-void TSearch::LoadIndex() {
+void TSearch::LoadIndex(TYPE type) {
+
     std::string  str;
     std::string  filePath = "";
     std::fstream file;
+    TFileData    fileData;
+
+    this->tree.SetIndexPtr(&this->revIndex);
+
+    auto begin = std::chrono::steady_clock::now();
 
     for (const auto & entry : fs::directory_iterator(this->root)) {
         filePath = entry.path();
-        if(filePath.find(".html") != std::string::npos) {
-            // std::string cmd = "python3 extract_text_from_html.py " + filePath;
-            // char* cStrCmd  = new char[cmd.length() + 1];
-            // strcpy(cStrCmd, cmd.c_str());
-            // system(cStrCmd);
-            // delete[] cStrCmd;
-            // std::size_t fSize = filePath.length();
-            // filePath[fSize - 4] = 'd';
-            // filePath[fSize - 3] = 'a';
-            // filePath[fSize - 2] = 't';
-            // filePath[fSize - 1] = 'a';
-            continue;
-        }
         file.open(filePath, std::fstream::in);
         if(file.is_open()) {
-            std::cout << "\rReading " << filePath << "...";
             std::size_t nLine = 0;
+
+            //std::cout << "\rReading... " + filePath;
+
+            fileData.filepath = "";
+            std::size_t fPos = filePath.length();
+            
+            for(fPos = fPos - 6; filePath[fPos] != '/'; --fPos) {
+                fileData.filepath = filePath[fPos] + fileData.filepath;
+            }
+
+            TTokenData  tokenData;
+            int         tokenCount;
+
             while(std::getline(file, str)) {
+                if (nLine == 0) {
+                    fileData.title = str;
+                    ++nLine;
+                    continue;
+                }
+
+                if (nLine % 2 == 0) {
+                    tokenCount = std::stoi(str);
+                    switch(type) {
+                        case TSearch::BIT_INDEX:
+                            this->bitIndex.Add(tokenData.token, tokenCount, fileData);
+                            break;
+                        case TSearch::REV_INDEX:
+                            this->revIndex.Add(tokenData, tokenCount, fileData);
+                            break;
+                    }
+
+                }
+                else {
+                    tokenData.token = str;
+                }
+
                 ++nLine;
-                std::size_t fSize = filePath.length();
-                filePath[fSize - 4] = 'h';
-                filePath[fSize - 3] = 't';
-                filePath[fSize - 2] = 'm';
-                filePath[fSize - 1] = 'l';
-                this->index.Add(str, filePath);
             }
             file.close();
         }
@@ -144,73 +119,39 @@ void TSearch::LoadIndex() {
             return;
         }
     }
-    std::cout << "\33[2K\rReading finished!" << std::endl;
-    std::string sFilename = "IndexInfo.data";
-    this->index.WriteToFile(sFilename);
+    auto end = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
+    std::cout << "\33[2K\rReading finished! Time: " << elapsed_ms.count() << std::endl;
     return;
 }
 
-TArray<std::string> TSearch::BooleanSearch(std::string strToSearch) {
-
-    this->search = strToSearch;
-    this->_BoolParse();
-    std::cout << "Syntax tree:" << std::endl;
-    this->tree.Print();
+TArray<TFileData*> TSearch::Search(std::string strToSearch, TYPE type) {
     
-    unsigned char result;
-
-    TArray<std::string*> files = this->index.GetFileList();
-    std::size_t sizeF = files.Size();
-
-    TArray<std::string> data;
-
-    for(std::size_t j = 0; j < sizeF; ++j) {
-        
-        result = this->tree.CalcBool(files[j], &(this->index));
-
-        if(result) {
-            data.Push(std::string(*files[j]));
-        }
+    switch(type) {
+        case REV_INDEX:
+            return _RevSearch(strToSearch);
+        case BIT_INDEX:
+            return _BitSearch(strToSearch);
+        default:
+            return TArray<TFileData*>();
     }
-
-    this->tree.Clear();
-    
-    std::cout << "\33[2K\rSearch finished!" << std::endl;
-    return TArray(data);
 }
 
-TArray<std::string> TSearch::StupidSearch(std::string strToSearch) {
 
-    std::string str;
-    std::string filePath = "";
-    std::fstream file;
-    TArray<std::string> data;
+TArray<TFileData*> TSearch::_RevSearch(std::string strToSearch) {
+    
+    this->tree.Clear();
+    this->search = strToSearch;
+    this->_BoolParse();
 
-    for (const auto & entry : fs::directory_iterator(this->root)) {
-        filePath = entry.path();
-        if(filePath.find(".data") != std::string::npos) {
-            continue;
-        }
-        file.open(filePath, std::fstream::in);
-        if(file.is_open()) {
-            // std::cout << "\rReading " << filePath << "...";
-            std::size_t nLine = 0;
-            while(std::getline(file, str)) {
-                ++nLine;
-                std::size_t p = str.find(strToSearch);
-                if(p != std::string::npos) {
-                    // std::cout << "\rFinded in " << filePath << " at " << nLine << ":" << p << std::endl;
-                    data.Push(filePath);
-                }
-            }
-            file.close();
-        }
-        else {
-            std::cerr << "ERROR: failed open " << filePath << std::endl;
-            return TArray(data);
-        }
-    }
-    std::flush(std::cout);
-    std::cout << "\33[2K\rSearch finished!" << std::endl;
-    return TArray(data);
+    return TArray<TFileData*>(this->tree.CalcBool());
+}
+
+TArray<TFileData*> TSearch::_BitSearch(std::string strToSearch) {
+
+    this->tree.Clear();
+    this->search = strToSearch;
+    this->_BoolParse();
+    
+    return TArray<TFileData*>(this->tree.CalcBool(&(this->bitIndex)));
 }

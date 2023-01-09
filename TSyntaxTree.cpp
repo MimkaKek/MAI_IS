@@ -4,6 +4,16 @@ TSyntaxTree::TSyntaxTree() {
     this->root = nullptr;
     this->lastToken = "";
     this->currentNode = nullptr;
+    this->isBool = false;
+    this->revIndex = nullptr;
+}
+
+TSyntaxTree::TSyntaxTree(TRevIndex* revIndex) {
+    this->root = nullptr;
+    this->lastToken = "";
+    this->currentNode = nullptr;
+    this->isBool = false;
+    this->revIndex = revIndex;
 }
 
 TSyntaxTree::~TSyntaxTree() {
@@ -12,7 +22,11 @@ TSyntaxTree::~TSyntaxTree() {
     }
 }
 
-void TSyntaxTree::InsertNewParentNode(TSyntaxTreeItem* newParentNode) {
+void TSyntaxTree::SetIndexPtr(TRevIndex* revIndex) {
+    this->revIndex = revIndex;
+}
+
+void TSyntaxTree::_InsertNewParentNode(TSyntaxTreeItem* newParentNode) {
 
     TSyntaxTreeItem* oldParent = this->currentNode->getParent();
 
@@ -36,7 +50,7 @@ void TSyntaxTree::InsertNewParentNode(TSyntaxTreeItem* newParentNode) {
     return;
 }
 
-void TSyntaxTree::LookForNegation() {
+void TSyntaxTree::_LookForNegation() {
 
     if (this->currentNode == this->root) {
         return;
@@ -63,7 +77,7 @@ void TSyntaxTree::LookForNegation() {
     return;
 }
 
-void TSyntaxTree::InsertNegation(TSyntaxTreeItem* newNegation) {
+void TSyntaxTree::_InsertNegation(TSyntaxTreeItem* newNegation) {
     std::string* lastToken = this->currentNode->getTokenPtr();
     if (*lastToken == "&&" || *lastToken == "||") {
         if(this->currentNode->getRight() == nullptr) {
@@ -77,7 +91,7 @@ void TSyntaxTree::InsertNegation(TSyntaxTreeItem* newNegation) {
     }
     else {
         TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
-        this->InsertAND(newANDNode);
+        this->_InsertAND(newANDNode);
         newANDNode->setRight(newNegation);
         newNegation->setParent(newANDNode);
     }
@@ -85,7 +99,7 @@ void TSyntaxTree::InsertNegation(TSyntaxTreeItem* newNegation) {
     return;
 }
 
-void TSyntaxTree::InsertOR(TSyntaxTreeItem* newORNode) {
+void TSyntaxTree::_InsertOR(TSyntaxTreeItem* newORNode) {
     std::string* lastToken = this->currentNode->getTokenPtr();
     if (*lastToken == "(") {
         std::cout << "ERROR: Bracket before AND/OR!" << std::endl;
@@ -96,14 +110,14 @@ void TSyntaxTree::InsertOR(TSyntaxTreeItem* newORNode) {
         return;
     }
     else {
-        this->InsertNewParentNode(newORNode);
+        this->_InsertNewParentNode(newORNode);
     }
 
     this->currentNode = newORNode;
     return;
 }
 
-void TSyntaxTree::InsertAND(TSyntaxTreeItem* newANDNode) {
+void TSyntaxTree::_InsertAND(TSyntaxTreeItem* newANDNode) {
     std::string* lastToken = this->currentNode->getTokenPtr();
 
     if (*lastToken == "||") {
@@ -123,14 +137,14 @@ void TSyntaxTree::InsertAND(TSyntaxTreeItem* newANDNode) {
         return;
     }
     else {
-        this->InsertNewParentNode(newANDNode);
+        this->_InsertNewParentNode(newANDNode);
     }
 
     this->currentNode = newANDNode;
     return;
 }
 
-void TSyntaxTree::InsertToken(TSyntaxTreeItem* newTokenNode) {
+void TSyntaxTree::_InsertToken(TSyntaxTreeItem* newTokenNode) {
     std::string* currentToken = this->currentNode->getTokenPtr();
     if ((*currentToken == "&&" || *currentToken == "||") && this->currentNode->getRight() == nullptr) {
         this->currentNode->setRight(newTokenNode);
@@ -146,9 +160,9 @@ void TSyntaxTree::InsertToken(TSyntaxTreeItem* newTokenNode) {
         newTokenNode->setParent(this->currentNode);
         this->currentNode = newTokenNode;
     } else {
-        this->LookForNegation();
+        this->_LookForNegation();
         TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
-        this->InsertAND(newANDNode);
+        this->_InsertAND(newANDNode);
         newANDNode->setRight(newTokenNode);
         newTokenNode->setParent(newANDNode);
     }
@@ -157,7 +171,7 @@ void TSyntaxTree::InsertToken(TSyntaxTreeItem* newTokenNode) {
 }
 
 
-void TSyntaxTree::InsertCloseBracket() {
+void TSyntaxTree::_InsertCloseBracket() {
     if (this->root == nullptr || this->currentNode == nullptr) {
         return;
     }
@@ -174,11 +188,11 @@ void TSyntaxTree::InsertCloseBracket() {
     tmp->setToken(")");
     this->currentNode = tmp;
 
-    this->LookForNegation();
+    this->_LookForNegation();
     return;
 }
 
-void TSyntaxTree::InsertOpenBracket(TSyntaxTreeItem* newBRNode) {
+void TSyntaxTree::_InsertOpenBracket(TSyntaxTreeItem* newBRNode) {
     std::string* lastToken = this->currentNode->getTokenPtr();
     if ((*lastToken == "&&" || *lastToken == "||") && this->currentNode->getRight() == nullptr) {
         this->currentNode->setRight(newBRNode);
@@ -190,7 +204,7 @@ void TSyntaxTree::InsertOpenBracket(TSyntaxTreeItem* newBRNode) {
     }
     else {
         TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
-        this->InsertAND(newANDNode);
+        this->_InsertAND(newANDNode);
         newANDNode->setRight(newBRNode);
         newBRNode->setParent(newANDNode);
     }
@@ -202,7 +216,7 @@ void TSyntaxTree::InsertOpenBracket(TSyntaxTreeItem* newBRNode) {
 void TSyntaxTree::Insert(std::string nToken) {
 
     if (nToken == ")") {
-        this->InsertCloseBracket();
+        this->_InsertCloseBracket();
         return;
     }
 
@@ -211,29 +225,35 @@ void TSyntaxTree::Insert(std::string nToken) {
     if(this->root == nullptr) {
         this->root = newNode;
         this->currentNode = newNode;
+        if(nToken != "&&" && nToken != "||" && nToken != "!" && nToken != "(") {
+            this->tokenList.Push(this->revIndex->GetTokenData(nToken));
+        }
         return;
     }
 
     if(nToken == "&&") {
-        this->InsertAND(newNode);
+        this->isBool = true;
+        this->_InsertAND(newNode);
     }
     else if(nToken == "||") {
-        this->InsertOR(newNode);
+        this->isBool = true;
+        this->_InsertOR(newNode);
     }
     else if(nToken == "!") {
-        this->InsertNegation(newNode);
+        this->_InsertNegation(newNode);
     }
     else if(nToken == "(") {
-        this->InsertOpenBracket(newNode);
+        this->_InsertOpenBracket(newNode);
     }
     else {
-        this->InsertToken(newNode);
+        this->_InsertToken(newNode);
+        this->tokenList.Push(this->revIndex->GetTokenData(nToken));
     }
 
     return;
 }
 
-unsigned char TSyntaxTree::RecCalcBool(TSyntaxTreeItem* node, std::string* filename, TBitTable* index) {
+unsigned char TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node, std::size_t fileID, TBitIndex* index) {
 
     if (!node) {
         return 1;
@@ -242,42 +262,206 @@ unsigned char TSyntaxTree::RecCalcBool(TSyntaxTreeItem* node, std::string* filen
     std::string* token = node->getTokenPtr();
 
     if (*token == "||") {
-        return this->RecCalcBool(node->getLeft(), filename, index) | this->RecCalcBool(node->getRight(), filename, index);
+        return this->_RecCalcBool(node->getLeft(), fileID, index) | this->_RecCalcBool(node->getRight(), fileID, index);
     }
     else if (*token == "&&") {
-        return this->RecCalcBool(node->getLeft(), filename, index) & this->RecCalcBool(node->getRight(), filename, index);
+        return this->_RecCalcBool(node->getLeft(), fileID, index) & this->_RecCalcBool(node->getRight(), fileID, index);
     }
     else if (*token == "!!") {
-        return !this->RecCalcBool(node->getLeft(), filename, index);
+        return !this->_RecCalcBool(node->getLeft(), fileID, index);
     }
     else if (*token == ")") {
-        return this->RecCalcBool(node->getLeft(), filename, index);
+        return this->_RecCalcBool(node->getLeft(), fileID, index);
     }
     else {
-        return index->BitGet(*node->getTokenPtr(), *filename);
+        return index->BitGet(*token, index->GetFileDataByID(fileID)->filepath);
     }
 }
 
-unsigned char TSyntaxTree::CalcBool(std::string* filename, TBitTable* index) {
-    return RecCalcBool(this->root, filename, index);
+TArray<TTokenData*> TSyntaxTree::GetTokenList() {
+    return this->tokenList;
+}
+
+TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
+    
+    if (!node) {
+        return TArray<TFileData*>();
+    }
+
+    std::string* token = node->getTokenPtr();
+
+    if (*token == "||") {
+        TArray<TFileData*> a = this->_RecCalcBool(node->getLeft());
+        TArray<TFileData*> b = this->_RecCalcBool(node->getRight());
+        TArray<TFileData*> c;
+
+        std::size_t sizeA = a.Size();
+        std::size_t sizeB = b.Size();
+
+        std::size_t iterA = 0;
+        std::size_t iterB = 0;
+
+        while(iterA < sizeA && iterB < sizeB) {
+            if(a[iterA]->id > b[iterB]->id) {
+                c.Push(b[iterB]);
+                ++iterB;
+            }
+            else if (a[iterA]->id < b[iterB]->id) {
+                c.Push(a[iterA]);
+                ++iterA;
+            }
+            else {
+                c.Push(a[iterA]);
+                ++iterA;
+                ++iterB;
+            }
+        }
+
+        while(iterB < sizeB) {
+            c.Push(b[iterB]);
+            ++iterB;
+        }
+
+        while(iterA < sizeA) {
+            c.Push(a[iterA]);
+            ++iterA;
+        }
+
+        return TArray<TFileData*>(c);
+    }
+    else if (*token == "&&") {
+        TArray<TFileData*> a = this->_RecCalcBool(node->getLeft());
+        TArray<TFileData*> b = this->_RecCalcBool(node->getRight());
+        TArray<TFileData*> c;
+
+        std::size_t sizeA = a.Size();
+        std::size_t sizeB = b.Size();
+
+        std::size_t iterA = 0;
+        std::size_t iterB = 0;
+
+        while(iterA < sizeA && iterB < sizeB) {
+            if(a[iterA]->id > b[iterB]->id) {
+                if(this->isBool == false) {
+                    c.Push(b[iterB]);
+                }
+                ++iterB;
+            }
+            else if (a[iterA]->id < b[iterB]->id) {
+                if(this->isBool == false) {
+                    c.Push(a[iterA]);
+                }
+                ++iterA;
+            }
+            else {
+                c.Push(a[iterA]);
+                ++iterA;
+                ++iterB;
+            }
+        }
+
+        if (this->isBool == false) {
+            while(iterB < sizeB) {
+                c.Push(b[iterB]);
+                ++iterB;
+            }
+            while(iterA < sizeA) {
+                c.Push(a[iterA]);
+                ++iterA;
+            }
+        }
+        
+        return TArray<TFileData*>(c);
+    }
+    else if (*token == "!!") {
+        return this->_RecCalcBool(node->getLeft()); //TODO
+    }
+    else if (*token == ")") {
+        return this->_RecCalcBool(node->getLeft());
+    }
+    else {
+        return this->revIndex->GetArray(*token);
+    }
+ }
+
+TArray<TFileData*> TSyntaxTree::CalcBool(TBitIndex* index) {
+
+    unsigned char result;
+
+    std::size_t sizeF = index->SizeInBits();
+
+    TArray<TFileData*> data;
+
+    for(std::size_t j = 0; j < sizeF; ++j) {
+        
+        result = this->_RecCalcBool(this->root, j, index);
+
+        if(result) {
+            data.Push(index->GetFileDataByID(j));
+        }
+    }
+
+    return TArray<TFileData*>(data);
+}
+
+void TSyntaxTree::_RecSortArray(TArray<TFileData*>& array, std::size_t lPos, std::size_t rPos) {
+    if (lPos == rPos) {
+        return;
+    }
+    int mid = (lPos + rPos) / 2;
+
+    this->_RecSortArray(array, lPos   , mid );
+    this->_RecSortArray(array, mid + 1, rPos);
+
+    int lap = lPos;
+    int rap = mid + 1;
+    TArray<TFileData*> tmp(rPos - lPos + 1);
+
+    for (int step = 0; step < rPos - lPos + 1; ++step) {
+        if ((rap > rPos) || ((lap <= mid) && (array[lap]->score > array[rap]->score))) {
+            tmp[step] = array[lap];
+            ++lap;
+        }
+        else {
+            tmp[step] = array[rap];
+            ++rap;
+        }
+    }
+
+    for (int step = 0, pos = lPos; step < rPos - lPos + 1; ++step, ++pos) {
+        array[pos] = tmp[step];
+    }
+}
+
+TArray<TFileData*> TSyntaxTree::CalcBool() {
+    TArray<TFileData*>  filesList = this->_RecCalcBool(this->root);
+    if (filesList.Size() == 0) {
+        return TArray<TFileData*>(filesList);
+    }
+    this->revIndex->CalcTFxIDF(this->tokenList, filesList);
+    this->_RecSortArray(filesList, 0, filesList.Size() - 1);
+    return TArray<TFileData*>(filesList);
 }
 
 void TSyntaxTree::Clear() {
     if(this->root) {
         delete this->root;
-        this->root = nullptr;
-        this->currentNode = nullptr;
     }
+    this->root = nullptr;
+    this->lastToken = "";
+    this->currentNode = nullptr;
+    this->isBool = false;
+    this->tokenList.Clear();
 }
 
 const int MAX_DEEP = 10;
 
-void TSyntaxTree::RecPrint(TSyntaxTreeItem* root, int deep) {
+void TSyntaxTree::_RecPrint(TSyntaxTreeItem* root, int deep) {
     
     int pDeep;
     
     if ( root->getLeft() != nullptr ) {
-        this->RecPrint(root->getLeft(), deep + 1);
+        this->_RecPrint(root->getLeft(), deep + 1);
     }
     else {
         for(int i = 0; i < deep + 1; ++i) {
@@ -316,7 +500,7 @@ void TSyntaxTree::RecPrint(TSyntaxTreeItem* root, int deep) {
     std::cout << std::endl;
 
     if ( root->getRight() != nullptr ) {
-        this->RecPrint(root->getRight(), deep + 1);
+        this->_RecPrint(root->getRight(), deep + 1);
     }
     else {
         for(int i = 0; i < deep + 1; ++i) {
@@ -333,6 +517,6 @@ void TSyntaxTree::RecPrint(TSyntaxTreeItem* root, int deep) {
 }
 
 void TSyntaxTree::Print() {
-    this->RecPrint(this->root, 0);
+    this->_RecPrint(this->root, 0);
     return;
 }

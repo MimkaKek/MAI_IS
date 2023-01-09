@@ -1,127 +1,120 @@
 #include <string>
 #include <cstdlib>
 #include <iostream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <string.h>
 
 #include "TSearch.hpp"
 #include "TArray.hpp"
 #include "TSyntaxTree.hpp"
 
-int testSynTree() {
+int caseSocket(TSearch& search) {
+    
+    char buffer[1000];
+    int n;
+    const int SERVER_PORT = 50007;
 
-    TSyntaxTree tree;
+    sockaddr_in serverAddr;
+    serverAddr.sin_family       = AF_INET;
+    serverAddr.sin_port         = htons(SERVER_PORT);
+    serverAddr.sin_addr.s_addr  = INADDR_ANY;
 
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T1");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("||");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("!");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("(");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("!");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("(");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T2");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T3");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("||");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T4");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert(")");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert(")");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T5");
-    tree.Print();
-    std::cout << "=========================" << std::endl;
-    tree.Insert("T6");
-    tree.Print();
-    // T1 || !(!(T2 T3 || T4)) && T5 T6
+    sockaddr_in clientAddr;
+    socklen_t   sin_size = sizeof(struct sockaddr_in);
+
+    int serverSock = socket(AF_INET, SOCK_STREAM, 0);
+    bind(serverSock, (struct sockaddr*)&serverAddr, sizeof(struct sockaddr));
+    listen(serverSock, 1);
+
+    while(true) {
+        std::cout << "Accept new client TCP connect\n";
+        int clientSock = accept(serverSock, (struct sockaddr*) &clientAddr, &sin_size);
+
+        bzero(buffer, 1000);
+
+        std::cout << "Reading..." << std::endl;
+        n = recv(clientSock, buffer, 500, 0);
+        if (n == -1 || n == 0) {
+            break;
+        }
+        std::string str = buffer;
+        
+        TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
+
+        for(std::size_t i = 0; i < callback.Size(); ++i) {
+            str = callback[i]->filepath + "&&&" + callback[i]->title + "&&&" + std::to_string(callback[i]->score);
+            strcpy(buffer, str.c_str());
+            std::cout << "Write: " << buffer << std::endl;
+            n = send(clientSock, buffer, strlen(buffer), 0);
+            if (n == -1) {
+                break;
+            }
+            n = recv(clientSock, buffer, 500, 0);
+            if (n == -1 || n == 0) {
+                break;
+            }
+        }
+
+        if (n == -1 || n == 0) {
+            break;
+        }
+        str = "END";
+        strcpy(buffer, str.c_str());
+        n = send(clientSock, buffer, strlen(buffer), 0);
+        if (n == -1) {
+            break;
+        }
+        n = recv(clientSock, buffer, 500, 0);
+        if (n == -1 || n == 0) {
+            break;
+        }
+
+        std::cout << "Close socket" << std::endl;
+        close(clientSock);
+    }
+
     return 0;
 }
 
-int testTArray() {
+int caseTerminal(TSearch& search, std::string prefixPath, std::string suffixPath) {
+    std::string str = "";
 
-    TArray<std::string> test;
-    std::string str = "test";
-    std::size_t testSize = 643;
+    while (std::getline(std::cin, str)) {
 
-    for(std::size_t i = 0; i < testSize; ++i) {
-        std::string strN = str + std::to_string(i); 
-        test.Push(strN);
+        // std::cout << "Stupid Search" << std::endl;
+        // callback = search.StupidSearch(str);
+        // callback.Print();
+
+        // std::cout << "Boolean Search" << std::endl;
+        // callback = search.BooleanSearch(str);
+        // callback.Print();
+
+        std::cout << "Rev Search" << std::endl;
+        TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
+        for(std::size_t i = 0; i < callback.Size(); ++i) {
+            std::cout << "Path: "  << prefixPath << callback[i]->filepath << suffixPath << std::endl;
+            std::cout << "Title: " << callback[i]->title << std::endl;
+            std::cout << "Score: " << callback[i]->score << std::endl;
+            std::cout << std::endl;
+        }
     }
-
-    for(std::size_t i = 0; i < testSize; ++i) {
-        std::cout << test[i] << std::endl;
-    }
-
-    for(std::size_t i = 0; i < testSize; ++i) {
-        std::string strN = test.Pop();
-        std::cout << strN << std::endl;
-    }
-
-    TArray<std::string> test2;
-
-    TArray<std::string> test3;
-
-    test3.Push("test");
-
-    TArray<std::size_t> test4;
-
-    test4.Push(123);
-    std::cout << test4[0] << std::endl;
-    test4[0] = 321;
-    std::cout << test4[0] << std::endl;
-    std::size_t tmpvar = test4[0];
-    tmpvar = 5421;
-    std::cout << "<<<<<<<<<<<<<<<<" << std::endl;
-    std::cout << test4[0] << std::endl;
-    std::cout << tmpvar << std::endl;
-
-    std::string tmpstr = test3[0];
-
-    tmpstr = "tmpstr";
-    std::cout << "<<<<<<<<<<<<<<<<" << std::endl;
-    std::cout << test3[0] << std::endl;
-    std::cout << tmpstr << std::endl;
 
     return 0;
 }
 
 int main() {
-    std::string str = "";
-    TArray<std::string> callback;
-    TSearch search = TSearch();
 
-    // testSynTree();
-    
-    search.LoadIndex();
-    while (std::getline(std::cin, str)) {
-        // std::cout << "Search: " << str << std::endl;
-        // std::cout << "Stupid Search" << std::endl;
-        // callback = search.StupidSearch(str);
-        // callback.Print();
-        std::cout << "Boolean Search" << std::endl;
-        callback = search.BooleanSearch(str);
-        callback.Print();
-    }
+    std::string path = "./templates/ruwiki/data";
+    TSearch search = TSearch(path);
+    std::string prefixPath = "ruwiki/html/";
+    std::string suffixPath = ".html";
 
+    search.LoadIndex(TSearch::REV_INDEX);
+    caseSocket(search);
+    //caseTerminal(search, prefixPath, suffixPath);
     std::cout << "End!" << std::endl;
     return 0;
 }

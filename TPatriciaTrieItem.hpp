@@ -20,10 +20,12 @@ class TPatriciaTrieItem {
     public:
 
         TPatriciaTrieItem();
-        TPatriciaTrieItem(std::string&, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
+        TPatriciaTrieItem(std::string&, T&, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
         virtual ~TPatriciaTrieItem();
 
-        void Initialize(std::string&, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
+        T* GetData();
+
+        void Initialize(std::string, T, int, TPatriciaTrieItem<T>*, TPatriciaTrieItem<T>*);
 };
 
 #endif

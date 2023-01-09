@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            input.text {
+                width: 80%;
+            }
+            input.submit {
+                width: 100px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Результаты:</h1>
+        <p>Время = {{ dTime }} сек</p>
+        {% for link in links %}
+        <p><a href="{{ url_for('open_doc', doc_url=link.filepath) }}">{{ link.title }}</a> | Score: {{ link.score }}</p>
+        {% endfor %}
+    </body>
+</html>

@@ -1,107 +1,98 @@
 #include "TRevIndex.hpp"
 
-TRevIndex::TRevIndex() {
-    this->tSize = 0;
-    this->fSize = 0;
-};
+TRevIndex::TRevIndex(): tokenToTokenData(), filenameToFileData() {};
 
 TRevIndex::~TRevIndex() {};
 
-std::size_t TRevIndex::Add(std::string& token, std::string& filename) {
+std::size_t TRevIndex::Add(TTokenData& tokenData, int count, TFileData& filedata) {
 
-    std::size_t fIndex = 0;
-    std::size_t tIndex = 0;
+    filedata.id = this->filenameToFileData.Size();
+    tokenData.id = this->tokenToTokenData.Size();
 
-    if(this->filenameToId.Insert(filename, this->fSize) != nullptr) {
-
-        std::string idStr = std::to_string(this->fSize);
-        this->idToFilename.Insert(idStr, filename);
-
-        fIndex = this->fSize;
-        ++(this->fSize);
+    TPatriciaTrieItem<TTokenData>* tData = this->tokenToTokenData.Insert(tokenData.token, tokenData);
+    if(tData != nullptr) {
+        tData->GetData()->df = 1;
     }
     else {
-        fIndex = *(this->filenameToId.Lookup(filename));
+        tData = this->tokenToTokenData.LookupNode(tokenData.token);
+        tData->GetData()->df += 1;
     }
 
-    if(this->tokensToId.Insert(token, this->tSize) != nullptr) {
-
-        std::string idStr = std::to_string(this->tSize);
-        this->idToTokens.Insert(idStr, token);
-
-        tIndex = this->tSize;
-        ++(this->tSize);
-    }
-    else {
-        tIndex = *(this->tokensToId.Lookup(token));
+    TPatriciaTrieItem<TFileData>* fData = this->filenameToFileData.Insert(filedata.filepath, filedata);
+    if(fData == nullptr) {
+        fData = this->filenameToFileData.LookupNode(filedata.filepath);
     }
 
-    if (this->index.Size() <= tIndex) {
-        this->index.Push(TArray<std::size_t>());
-        this->counter.Push(0);
-    }
-    this->index[tIndex].Push(fIndex);
-    
-    std::size_t j = this->index[fIndex].Size() - 1;
+    std::string tokenID = std::to_string(tData->GetData()->id);
 
-    while(j != 0 && this->index[fIndex][j] < this->index[fIndex][j - 1]) {
-        std::size_t tmp            = this->index[fIndex][j];
-        this->index[fIndex][j]     = this->index[fIndex][j - 1];
-        this->index[fIndex][j - 1] = tmp;
-        --j;
-    }
+    fData->GetData()->tokenToTF.Insert(tokenID, count);
+    tData->GetData()->files.Push(fData->GetData());
 
     return 0;
 }
 
-std::string TRevIndex::Get(std::string& token) {
-
-    std::size_t tIndex = *(this->tokensToId.Lookup(token));
-
-    if(this->counter[tIndex] >= this->index[tIndex].Size()) {
-        return std::string("");
-    }
-
-    std::size_t fIndex = this->index[tIndex][this->counter[tIndex]];
-    this->counter[tIndex] += 1;
-    std::string idStr = std::to_string(fIndex);
-    std::string filename = *(this->idToFilename.Lookup(idStr));
-
-    return filename;
+TTokenData* TRevIndex::GetTokenData(std::string& token) {
+    return this->tokenToTokenData.Lookup(token);
 }
 
-void TRevIndex::Reset() {
-    for(std::size_t i = 0; i < this->tSize; ++i) {
-        this->counter[i] = 0;
-    }
-    return;
+TFileData* TRevIndex::GetFileData(std::string& filename) {
+    return this->filenameToFileData.Lookup(filename);
 }
 
-void TRevIndex::Reset(std::string& token) {
+void TRevIndex::CalcTFxIDF(TArray<TTokenData*>& tokenList, TArray<TFileData*>& filesList) {
 
-    std::size_t tIndex = *(this->tokensToId.Lookup(token));
+    std::size_t tokenSum = tokenList.Size();
+    std::size_t fileSum  = filesList.Size();
 
-    this->counter[tIndex] = 0;
+    for (std::size_t fileID = 0; fileID < fileSum; ++fileID) {
 
-    return;
+        float score = 0.0;
+
+        for (std::size_t tokenID = 0; tokenID < tokenSum; ++tokenID) {
+            
+            std::string id = std::to_string(tokenList[tokenID]->id);
+
+            int* ptrTf = filesList[fileID]->tokenToTF.Lookup(id);
+            float weightTf = (ptrTf == nullptr) ? 0.0 : (1 + std::log10((float) *ptrTf));
+            
+            float df = this->tokenToTokenData[tokenList[tokenID]->token].df;
+            float weightDf = std::log10((float) this->filenameToFileData.Size() / df);
+
+            score += weightTf * weightDf;
+
+        }
+        
+        filesList[fileID]->score = score;
+    }
+}
+
+TArray<TFileData*> TRevIndex::GetArray(std::string& token) {
+    TTokenData* tokenData = this->tokenToTokenData.Lookup(token);
+    return (tokenData == nullptr) ? TArray<TFileData*>() : TArray<TFileData*>(tokenData->files);
 }
 
 void TRevIndex::Print() {
 
-    // for(std::size_t i = 0; i < this->tSize; ++i) {
+    TArray<std::string*> tokenList = this->tokenToTokenData.KeyList();
+    std::size_t tSize = tokenList.Size();
 
-    //     std::size_t size = this->index[i].Size();
-    //     std::cout << //TODO
-    //     for(std::size_t j = 0; j < size; ++j) {
-    //         std::cout << 
-    //     }
-    // }
+    for(std::size_t tokenID = 0; tokenID < tSize; ++tokenID) {
+        
+        TTokenData* tokenData = this->tokenToTokenData.Lookup(*tokenList[tokenID]);
+        std::size_t fSize = tokenData->files.Size();
 
-    // std::size_t tIndex = *(this->tokensToId.Lookup(cstrT));
+        std::cout << "Token: " << tokenData->token << std::endl;
+        std::cout << "Files: ";
 
-    // this->counter[tIndex] = 0;
+        for(std::size_t fileID = 0; fileID < fSize; ++fileID) {
 
-    // delete[] cstrT;
+            TFileData* fileData = tokenData->files[fileID];
+
+            std::cout << fileData->filepath << ":" << fileData->title << " | ";
+        }
+
+        std::cout << std::endl;
+    }
     
-    // return;
+    return;
 }

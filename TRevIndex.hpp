@@ -4,25 +4,19 @@
 #include <cstdlib>
 #include <iostream>
 #include <cstring>
+#include <string>
+#include <unistd.h>
+#include <cmath>
 #include "TPatriciaTrie.hpp"
+#include "TArray.hpp"
+#include "TFileData.hpp"
+#include "TTokenData.hpp"
 
 class TRevIndex {
     private:
-        
-        // X - Filenames
-        // Y - Tokens
-        // bitStream[Y][X]
 
-        TArray<TArray<std::size_t>> index;
-        TArray<std::size_t>         counter;
-
-        TPatriciaTrie<std::size_t> filenameToId;
-        TPatriciaTrie<std::string> idToFilename;
-        TPatriciaTrie<std::size_t> tokensToId;
-        TPatriciaTrie<std::string> idToTokens;
-
-        std::size_t tSize;
-        std::size_t fSize;
+        TPatriciaTrie<TTokenData>  tokenToTokenData;
+        TPatriciaTrie<TFileData>   filenameToFileData;
 
     public:
 
@@ -30,12 +24,17 @@ class TRevIndex {
         ~TRevIndex();
 
         void Print();
-        void Reset();
-        void Reset(std::string&);
 
-        std::size_t Add(std::string&, std::string&);
+        TArray<TFileData*>   IDToFileData(TArray<std::size_t>&);
 
-        std::string Get(std::string&);
+        std::size_t          Add(TTokenData&, int, TFileData&);
+
+        TArray<TFileData*>   GetArray(std::string&);
+
+        TTokenData*          GetTokenData(std::string&);
+        TFileData*           GetFileData(std::string&);
+
+        void                 CalcTFxIDF(TArray<TTokenData*>&, TArray<TFileData*>&);
 };
 
 #endif
