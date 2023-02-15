@@ -11,12 +11,14 @@ class TTokenData {
     public:
         std::string         token;
         TArray<TFileData*>  files;
+        std::string         translation;
         std::size_t         df;
         std::size_t         id;
 
         TTokenData();
         TTokenData(TTokenData&);
-        TTokenData(std::string);
+        TTokenData(std::string&);
+        TTokenData(std::string&, std::string&);
         ~TTokenData();
 
         friend std::ostream& operator << (std::ostream&, TTokenData&);
@@ -27,6 +29,8 @@ class TTokenData {
             this->files = data.files;
             this->df    = data.df;
             this->id    = data.id;
+
+            this->translation    = data.translation;
 
             return *this;
         }

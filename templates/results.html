@@ -13,6 +13,8 @@
     <body>
         <h1>Результаты:</h1>
         <p>Время = {{ dTime }} сек</p>
+        <p>Альтенатива запросу: {{ alternates }}</p>
+        <p></p>
         {% for link in links %}
         <p><a href="{{ url_for('open_doc', doc_url=link.filepath) }}">{{ link.title }}</a> | Score: {{ link.score }}</p>
         {% endfor %}

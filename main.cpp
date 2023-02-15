@@ -11,6 +11,18 @@
 #include "TArray.hpp"
 #include "TSyntaxTree.hpp"
 
+int SaveSendMsg(int clientSock, char* buffer, std::string& str) {
+    int n;
+    strcpy(buffer, str.c_str());
+    std::cout << "Write: " << buffer << std::endl;
+    n = send(clientSock, buffer, strlen(buffer), 0);
+    if (n == -1) {
+        return n;
+    }
+    n = recv(clientSock, buffer, 500, 0);
+    return n;
+}
+
 int caseSocket(TSearch& search) {
     
     char buffer[1000];
@@ -25,49 +37,57 @@ int caseSocket(TSearch& search) {
     sockaddr_in clientAddr;
     socklen_t   sin_size = sizeof(struct sockaddr_in);
 
+    std::cout << "Create socket..." << std::endl;
     int serverSock = socket(AF_INET, SOCK_STREAM, 0);
     bind(serverSock, (struct sockaddr*)&serverAddr, sizeof(struct sockaddr));
     listen(serverSock, 1);
 
     while(true) {
-        std::cout << "Accept new client TCP connect\n";
+        std::cout << "Accepting new client TCP connect" << std::endl;
         int clientSock = accept(serverSock, (struct sockaddr*) &clientAddr, &sin_size);
 
         bzero(buffer, 1000);
 
-        std::cout << "Reading..." << std::endl;
+        std::cout << "Receive request..." << std::endl;
         n = recv(clientSock, buffer, 500, 0);
         if (n == -1 || n == 0) {
+            std::cout << "Last request. Close connect." << std::endl;
             break;
         }
         std::string str = buffer;
         
         TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
-
-        for(std::size_t i = 0; i < callback.Size(); ++i) {
-            str = callback[i]->filepath + "&&&" + callback[i]->title + "&&&" + std::to_string(callback[i]->score);
-            strcpy(buffer, str.c_str());
-            std::cout << "Write: " << buffer << std::endl;
-            n = send(clientSock, buffer, strlen(buffer), 0);
-            if (n == -1) {
-                break;
-            }
-            n = recv(clientSock, buffer, 500, 0);
+        TArray<std::string> translates = search.GetAlternate();
+        str = "";
+        for (std::size_t i = 0; i < translates.Size(); ++i) {
+            n = SaveSendMsg(clientSock, buffer, translates[i]);
             if (n == -1 || n == 0) {
                 break;
             }
         }
-
         if (n == -1 || n == 0) {
             break;
         }
+
         str = "END";
-        strcpy(buffer, str.c_str());
-        n = send(clientSock, buffer, strlen(buffer), 0);
-        if (n == -1) {
+        n = SaveSendMsg(clientSock, buffer, str);
+        if (n == -1 || n == 0) {
             break;
         }
-        n = recv(clientSock, buffer, 500, 0);
+
+        for(std::size_t i = 0; i < callback.Size(); ++i) {
+            str = callback[i]->filepath + "&&&" + callback[i]->title + "&&&" + std::to_string(callback[i]->score);
+            n = SaveSendMsg(clientSock, buffer, str);
+            if (n == -1 || n == 0) {
+                break;
+            }
+        }
+        if (n == -1 || n == 0) {
+            break;
+        }
+
+        str = "END";
+        n = SaveSendMsg(clientSock, buffer, str);
         if (n == -1 || n == 0) {
             break;
         }

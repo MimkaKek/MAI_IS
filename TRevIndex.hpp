@@ -16,6 +16,7 @@ class TRevIndex {
     private:
 
         TPatriciaTrie<TTokenData>  tokenToTokenData;
+        TPatriciaTrie<TArray<TTokenData*>> trToTokenData;
         TPatriciaTrie<TFileData>   filenameToFileData;
 
     public:
@@ -28,10 +29,11 @@ class TRevIndex {
         TArray<TFileData*>   IDToFileData(TArray<std::size_t>&);
 
         std::size_t          Add(TTokenData&, int, TFileData&);
+        std::size_t          AddTranslation(std::string&, std::string&);
 
         TArray<TFileData*>   GetArray(std::string&);
 
-        TTokenData*          GetTokenData(std::string&);
+        TArray<TTokenData*>  GetTokenData(std::string&);
         TFileData*           GetFileData(std::string&);
 
         void                 CalcTFxIDF(TArray<TTokenData*>&, TArray<TFileData*>&);

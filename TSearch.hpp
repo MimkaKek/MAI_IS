@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <cstring>
 #include <chrono>
+#include <cmath>
+#include <iostream>
 
 #include "TArray.hpp"
 #include "TFindedData.hpp"
@@ -18,13 +20,14 @@ namespace fs = std::filesystem;
 class TSearch {
     private:
         std::string              root;
-        std::string              search;
+        std::string              totalPath;
 
         TBitIndex                bitIndex;
         TSyntaxTree              tree;
         TRevIndex                revIndex;
 
-        void _BoolParse();
+        void _BoolParse(std::string&);
+        void _LoadTranslation();
 
         TArray<TFileData*> _RevSearch(std::string);
         TArray<TFileData*> _BitSearch(std::string);
@@ -40,6 +43,7 @@ class TSearch {
         void LoadIndex(TYPE);
 
         TArray<TFileData*> Search(std::string, TYPE);
+        TArray<std::string> GetAlternate();
 };
 
 #endif

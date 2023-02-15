@@ -16,6 +16,7 @@ class TSyntaxTree {
         TRevIndex*          revIndex;
 
         TArray<TTokenData*> tokenList;
+        TArray<std::string> alternates;
 
         void _InsertAND(TSyntaxTreeItem*);
         void _InsertOR(TSyntaxTreeItem*);
@@ -44,10 +45,12 @@ class TSyntaxTree {
         TArray<TFileData*> CalcBool();
 
         TArray<TTokenData*> GetTokenList();
+        TArray<std::string> GetAlternate();
 
         void Clear();
         void Insert(std::string);
         void Print();
+
 
         void SetIndexPtr(TRevIndex*);
 };

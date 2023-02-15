@@ -5,9 +5,11 @@ import os
 import time
 from collections import Counter
 import pymorphy2
+import translators.server as tss
 
 morph = pymorphy2.MorphAnalyzer()
 total_tokens = Counter()
+CHUNK_SIZE = 5000
 
 def ExtractTokens(filename):
     html_content = ""
@@ -63,14 +65,11 @@ def ExtractTokens(filename):
         for rule in regexp_rules:
             reg = re.compile(rule)
             output = reg.sub(' ', output)
-
+            
         output = output.split()
-        counter = Counter()
-        tmp = []
-        for word in output:
-            p = morph.parse(word)[0]
-            counter.update([p.normal_form])
-
+            
+        counter = Counter(output)
+        
         total_tokens.update(counter)
 
         fileToSave = filename[:-4] + "data"
@@ -96,27 +95,27 @@ def main():
             roots.append(arg)
             
         for root in roots:
-            # if not os.path.exists(os.path.join(root, "html")):
-            #     os.makedirs(os.path.join(root, "html"))
+            if not os.path.exists(os.path.join(root, "html")):
+                os.makedirs(os.path.join(root, "html"))
             
-            # if not os.path.exists(os.path.join(root, "data")):
-            #     os.makedirs(os.path.join(root, "data"))
+            if not os.path.exists(os.path.join(root, "data")):
+                os.makedirs(os.path.join(root, "data"))
 
-            # onlyfiles = [f for f in os.listdir(os.path.join(root, "html")) if os.path.isfile(os.path.join(root, "html", f))]
-            # for file in onlyfiles:
-            #     print("\33[2K\rReplace old html to root... " + os.path.join(root, "html", file) + " to " + os.path.join(root, file), end="")
-            #     os.replace(os.path.join(root, "html", file), os.path.join(root, file))
-            # print("")
+            onlyfiles = [f for f in os.listdir(os.path.join(root, "html")) if os.path.isfile(os.path.join(root, "html", f))]
+            for file in onlyfiles:
+                print("\33[2K\rReplace old html to root... " + os.path.join(root, "html", file) + " to " + os.path.join(root, file), end="")
+                os.replace(os.path.join(root, "html", file), os.path.join(root, file))
+            print("")
 
-            # for filename in os.listdir(os.path.join(root, "data")):
-            #     print("\33[2K\rRemove old .data files... " + os.path.join(root, "data", filename), end="")
-            #     file_path = os.path.join(root, "data", filename)
-            #     try:
-            #         if os.path.isfile(file_path) or os.path.islink(file_path):
-            #             os.unlink(file_path)
-            #     except Exception as e:
-            #         print('Failed to delete %s. Reason: %s' % (file_path, e))
-            # print("")
+            for filename in os.listdir(os.path.join(root, "data")):
+                print("\33[2K\rRemove old .data files... " + os.path.join(root, "data", filename), end="")
+                file_path = os.path.join(root, "data", filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                except Exception as e:
+                    print('Failed to delete %s. Reason: %s' % (file_path, e))
+            print("")
 
             print("Start extract...")
             print("========================")
@@ -137,9 +136,11 @@ def main():
             print("========================")
         
         print("Total token count: {total:13d}".format(total=len(total_tokens)))
-        with open("total.data", "w") as file:
+        
+        print("Saving backup.data...")
+        with open("backup.data", "w") as file:
             for key, value in total_tokens.items():
-                file.write(key + " " + str(value) + "\n")
+                file.write(str(key) + " " + str(value) + "\n")
 
     else:
         print("Example usage: python " + argv[0] + " [dir_path...]")

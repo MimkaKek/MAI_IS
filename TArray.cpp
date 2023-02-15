@@ -83,6 +83,13 @@ std::size_t TArray<T>::Size() {
 }
 
 template <typename T>
+void TArray<T>::Push(TArray<T>& array) {
+    for(std::size_t i = 0; i < array.Size(); ++i) {
+        this->Push(array[i]);
+    }
+}
+
+template <typename T>
 void TArray<T>::Push(T item) {
 
     this->data[this->n]  = new T;
@@ -193,3 +200,5 @@ template class TArray<TPatriciaTrieItem<TFileData>*>;
 template class TArray<TTokenData>;
 template class TArray<TTokenData*>;
 template class TArray<TPatriciaTrieItem<TTokenData>*>;
+template class TArray<TPatriciaTrieItem<TTokenData*>*>;
+template class TArray<TPatriciaTrieItem<TArray<TTokenData*>>*>;

@@ -43,3 +43,5 @@ template class TPatriciaTrieItem<TFileData>;
 
 #include "TTokenData.hpp"
 template class TPatriciaTrieItem<TTokenData>;
+template class TPatriciaTrieItem<TTokenData*>;
+template class TPatriciaTrieItem<TArray<TTokenData*>>;

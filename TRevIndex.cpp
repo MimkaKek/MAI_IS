@@ -1,6 +1,6 @@
 #include "TRevIndex.hpp"
 
-TRevIndex::TRevIndex(): tokenToTokenData(), filenameToFileData() {};
+TRevIndex::TRevIndex(): tokenToTokenData(), trToTokenData(), filenameToFileData() {};
 
 TRevIndex::~TRevIndex() {};
 
@@ -31,9 +31,50 @@ std::size_t TRevIndex::Add(TTokenData& tokenData, int count, TFileData& filedata
     return 0;
 }
 
-TTokenData* TRevIndex::GetTokenData(std::string& token) {
-    return this->tokenToTokenData.Lookup(token);
+std::size_t TRevIndex::AddTranslation(std::string& token, std::string& translation) {
+    TPatriciaTrieItem<TTokenData>* tItem = this->tokenToTokenData.LookupNode(token);
+
+    if (tItem == nullptr) {
+        return 1;
+    }
+
+    TTokenData* data  = tItem->GetData();
+    data->translation = translation;
+
+    TPatriciaTrieItem<TArray<TTokenData*>>* trItem = this->trToTokenData.LookupNode(translation);
+    if (trItem == nullptr) {
+        TArray<TTokenData*> array = TArray<TTokenData*>();
+        trItem = this->trToTokenData.Insert(translation, array);
+    }
+
+    trItem->GetData()->Push(data);
+    return 0;
 }
+
+TArray<TTokenData*> TRevIndex::GetTokenData(std::string& token) {
+    TArray<TTokenData*> array;
+    TTokenData* tokenData = this->tokenToTokenData.Lookup(token);
+    if (tokenData == nullptr) {
+
+        std::cout << "Can't find <" << token << "> in RU map" << std::endl;
+
+        TArray<TTokenData*>* tmp = this->trToTokenData.Lookup(token);
+        if (tmp != nullptr) {
+            for(std::size_t n = 0; n < tmp->Size(); ++n) {
+                array.Push(tmp->Get(n));
+            }
+        }
+        else {
+            std::cout << "Can't find <" << token << "> in EN map" << std::endl;
+        }
+    }
+    else {
+        array.Push(tokenData);
+    }
+
+    return TArray<TTokenData*>(array);
+}
+
 
 TFileData* TRevIndex::GetFileData(std::string& filename) {
     return this->filenameToFileData.Lookup(filename);
@@ -67,8 +108,36 @@ void TRevIndex::CalcTFxIDF(TArray<TTokenData*>& tokenList, TArray<TFileData*>& f
 }
 
 TArray<TFileData*> TRevIndex::GetArray(std::string& token) {
+    TArray<TTokenData*> array;
     TTokenData* tokenData = this->tokenToTokenData.Lookup(token);
-    return (tokenData == nullptr) ? TArray<TFileData*>() : TArray<TFileData*>(tokenData->files);
+    if (tokenData == nullptr) {
+
+        std::cout << "Can't find <" << token << "> in RU map" << std::endl;
+
+        TArray<TTokenData*>* tmp = this->trToTokenData.Lookup(token);
+        if (tmp != nullptr) {
+            for(std::size_t n = 0; n < tmp->Size(); ++n) {
+                array.Push(tmp->Get(n));
+            }
+        }
+        else {
+            std::cout << "Can't find <" << token << "> in EN map" << std::endl;
+        }
+    }
+    else {
+        array.Push(tokenData);
+    }
+
+    TArray<TFileData*> callback;
+
+    for(std::size_t n = 0; n < array.Size(); ++n) {
+        TArray<TFileData*>* tmp = &(array[n]->files);
+        for(std::size_t m = 0; m < tmp->Size(); ++m) {
+            callback.Push(tmp->Get(m));
+        }
+    }
+
+    return TArray<TFileData*>(callback);
 }
 
 void TRevIndex::Print() {

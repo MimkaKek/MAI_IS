@@ -226,7 +226,16 @@ void TSyntaxTree::Insert(std::string nToken) {
         this->root = newNode;
         this->currentNode = newNode;
         if(nToken != "&&" && nToken != "||" && nToken != "!" && nToken != "(") {
-            this->tokenList.Push(this->revIndex->GetTokenData(nToken));
+            TArray<TTokenData*> array = this->revIndex->GetTokenData(nToken);
+            for (std::size_t i = 0; i < array.Size(); ++i) {
+                if (nToken == array[i]->token) {
+                    this->alternates.Push(array[i]->translation);
+                }
+                else {
+                    this->alternates.Push(array[i]->token);
+                }
+            }
+            this->tokenList.Push(array);
         }
         return;
     }
@@ -247,7 +256,16 @@ void TSyntaxTree::Insert(std::string nToken) {
     }
     else {
         this->_InsertToken(newNode);
-        this->tokenList.Push(this->revIndex->GetTokenData(nToken));
+        TArray<TTokenData*> array = this->revIndex->GetTokenData(nToken);
+        for (std::size_t i = 0; i < array.Size(); ++i) {
+            if (nToken == array[i]->token) {
+                this->alternates.Push(array[i]->translation);
+            }
+            else {
+                this->alternates.Push(array[i]->token);
+            }
+        }
+        this->tokenList.Push(array);
     }
 
     return;
@@ -282,6 +300,10 @@ TArray<TTokenData*> TSyntaxTree::GetTokenList() {
     return this->tokenList;
 }
 
+TArray<std::string> TSyntaxTree::GetAlternate() {
+    return this->alternates;
+}
+
 TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
     
     if (!node) {
@@ -303,27 +325,62 @@ TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
 
         while(iterA < sizeA && iterB < sizeB) {
             if(a[iterA]->id > b[iterB]->id) {
-                c.Push(b[iterB]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != b[iterB]->id) {
+                        c.Push(b[iterB]);
+                    }
+                }
+                else {
+                    c.Push(b[iterB]);
+                }
                 ++iterB;
             }
             else if (a[iterA]->id < b[iterB]->id) {
-                c.Push(a[iterA]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != a[iterA]->id) {
+                        c.Push(a[iterA]);
+                    }
+                }
+                else {
+                    c.Push(a[iterA]);
+                }
                 ++iterA;
             }
             else {
-                c.Push(a[iterA]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != a[iterA]->id) {
+                        c.Push(a[iterA]);
+                    }
+                }
+                else {
+                    c.Push(a[iterA]);
+                }
                 ++iterA;
                 ++iterB;
             }
         }
 
         while(iterB < sizeB) {
-            c.Push(b[iterB]);
+            if (c.Size() > 0) {
+                if (c[c.Size() - 1]->id != b[iterB]->id) {
+                    c.Push(b[iterB]);
+                }
+            }
+            else {
+                c.Push(b[iterB]);
+            }
             ++iterB;
         }
 
         while(iterA < sizeA) {
-            c.Push(a[iterA]);
+            if (c.Size() > 0) {
+                if (c[c.Size() - 1]->id != a[iterA]->id) {
+                    c.Push(a[iterA]);
+                }
+            }
+            else {
+                c.Push(a[iterA]);
+            }
             ++iterA;
         }
 
@@ -343,18 +400,39 @@ TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
         while(iterA < sizeA && iterB < sizeB) {
             if(a[iterA]->id > b[iterB]->id) {
                 if(this->isBool == false) {
-                    c.Push(b[iterB]);
+                    if (c.Size() > 0) {
+                        if (c[c.Size() - 1]->id != b[iterB]->id) {
+                            c.Push(b[iterB]);
+                        }
+                    }
+                    else {
+                        c.Push(b[iterB]);
+                    }
                 }
                 ++iterB;
             }
             else if (a[iterA]->id < b[iterB]->id) {
                 if(this->isBool == false) {
-                    c.Push(a[iterA]);
+                    if (c.Size() > 0) {
+                        if (c[c.Size() - 1]->id != a[iterA]->id) {
+                            c.Push(a[iterA]);
+                        }
+                    }
+                    else {
+                        c.Push(a[iterA]);
+                    }
                 }
                 ++iterA;
             }
             else {
-                c.Push(a[iterA]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != a[iterA]->id) {
+                        c.Push(a[iterA]);
+                    }
+                }
+                else {
+                    c.Push(a[iterA]);
+                }
                 ++iterA;
                 ++iterB;
             }
@@ -362,11 +440,25 @@ TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
 
         if (this->isBool == false) {
             while(iterB < sizeB) {
-                c.Push(b[iterB]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != b[iterB]->id) {
+                        c.Push(b[iterB]);
+                    }
+                }
+                else {
+                    c.Push(b[iterB]);
+                }
                 ++iterB;
             }
             while(iterA < sizeA) {
-                c.Push(a[iterA]);
+                if (c.Size() > 0) {
+                    if (c[c.Size() - 1]->id != a[iterA]->id) {
+                        c.Push(a[iterA]);
+                    }
+                }
+                else {
+                    c.Push(a[iterA]);
+                }
                 ++iterA;
             }
         }
@@ -452,6 +544,7 @@ void TSyntaxTree::Clear() {
     this->currentNode = nullptr;
     this->isBool = false;
     this->tokenList.Clear();
+    this->alternates.Clear();
 }
 
 const int MAX_DEEP = 10;

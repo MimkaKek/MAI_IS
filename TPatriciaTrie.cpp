@@ -628,4 +628,6 @@ template class TPatriciaTrie<TFileData>;
 
 #include "TTokenData.hpp"
 template class TPatriciaTrie<TTokenData>;
+template class TPatriciaTrie<TTokenData*>;
+template class TPatriciaTrie<TArray<TTokenData*>>;
 

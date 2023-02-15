@@ -38,6 +38,7 @@ class TArray {
 
         std::size_t     Size();
         void            Push(T);
+        void            Push(TArray<T>&);
         T               Pop();
         int             Remove(std::size_t);
 
