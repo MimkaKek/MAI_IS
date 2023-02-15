@@ -1,0 +1,227 @@
+\section{Описание}
+
+Так как у меня программа на C++ загружает индекс за счёт чтения заранее заготовленных файлов, в которых содержится информация и токенах и их частоте, а также заголовок документа, созданных при помощи скриптов на Python и так как для веб-сервиса используется также Python - решил искать решения для перевода именно для него.
+
+Т.е. файлы будут генерироваться с токенами и их переводом. Достаточно на С++ просто учесть новый формат данных и эти данные загрузить и использовать. Таким образом получится избежать головной боли с обработкой текста на C++.
+
+Однако добавление перевода при генерации файлов многократно увеличило время, необходимое для генерации файлов из всего набора документов. Если до этого речь шла о 40 минутах, то сейчас речь идёт о нескольких часах - в пределах 4 часов на перевод 3 с половинной миллионов различных токенов.
+
+\lstset{extendedchars=\true}
+\section{Исходный код}
+
+Файлы с исходным кодом демонстрировались в лабораторных ранее. К тому же если отобразить здесь весь исходный код проекта, то отчёт выйдет на несколько десятков страниц. Поэтому я акцентирую внимание на изменениях в коде.
+
+В первую очередь стоит сделать скрипт на Python, который бы осуществлял перевод всех токенов:
+\begin{lstlisting}[language=Python]
+from bs4 import BeautifulSoup
+from sys import argv
+import re
+import os
+import time
+from collections import Counter
+import pymorphy2
+import translators.server as tss
+
+morph = pymorphy2.MorphAnalyzer()
+total_tokens = Counter()
+translated_tokens = dict()
+not_translated_tokens = dict()
+CHUNK_SIZE = 5000
+
+def main():
+    if len(argv) > 1:
+        print("Reading {file}...".format(file=argv[1]))
+        with open(argv[1], "r") as file:
+            for line in file:
+                buffer = line.split(" ")
+                token = buffer[0]
+                count = int(buffer[1])
+                total_tokens.update({token: count})
+
+        print("Reading {file}...".format(file=argv[2]))
+        with open(argv[2], "r") as file:
+            for line in file:
+                buffer = line.split(" ")
+                token = buffer[0]
+                tr = " ".join(buffer[1:-1])
+                count = int(buffer[-1])
+                if total_tokens.get(token) != None:
+                    translated_tokens.update({token: [tr, count]})
+
+        for key, value in total_tokens.items():
+            if translated_tokens.get(key) == None:
+                not_translated_tokens.update({key: value})
+
+        print(len(not_translated_tokens))
+
+        text = ""
+        print("Begin translate...")
+        begin_time = time.time()
+        count = len(translated_tokens)
+        with open(argv[2], "a") as file:
+            for key, value in not_translated_tokens.items():
+
+                newTextSize = len(text + key + "|")
+
+                if newTextSize < CHUNK_SIZE:
+                    text += key + "\n"
+                    count += 1
+                else:
+                    tr = tss.google(text, from_language="ru", to_language="en")
+                    tr = tr.split("\n")
+                    text = text.split("\n")
+
+                    pos = 0
+                    output = ""
+
+                    while pos < len(tr):
+                        output += text[pos].strip() + " " + tr[pos].strip().lower() + " " + str(value) + "\n"
+                        pos += 1
+
+                    file.write(output)
+
+                    text = key + "|"
+                    count += 1
+
+
+            delta_time = time.gmtime(time.time() - begin_time)
+            tm_hour    = delta_time.tm_hour
+            tm_min     = delta_time.tm_min
+            tm_sec     = delta_time.tm_sec
+            print("\33[2K\r| Total time: {hour:02d}:{min:02d}:{sec:02d} | Translating {n:10d} of {total:10d}...".format(hour=tm_hour, min=tm_min, sec=tm_sec, n=count, total=len(total_tokens)), end="")
+
+            total_tries = 3
+            tryN = 0
+
+            while True:
+                try:
+                    tr = tss.google(text, from_language="ru", to_language="en")
+                    break
+                except Exception as e:
+                    if tryN < total_tries:
+                        tryN += 1
+                        print("Error during translate received:")
+                        print(e)
+                        print("Retry... {n:1d}".format(n=tryN))
+                        time.sleep(1.0)
+                    else:
+                        break
+
+            tr = tr.split("\n")
+            text = text.split("\n")
+            pos = 0
+            output = ""
+
+            while pos < len(tr):
+                output += text[pos].strip() + " " + tr[pos].strip().lower() + " " + str(value) + "\n"
+                pos += 1
+
+            file.write(output)
+
+    else:
+        print("Example usage: python " + argv[0] + " [dir_path...]")
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+Далее когда переводы готовы, осталось переписать некоторые фрагменты кода, а также добавить новые поля для переводов. В первую очередь в TTokenData добавлено поле для переводов токена:
+\begin{lstlisting}[language=C++]
+std::string translation;
+\end{lstlisting}
+
+Также на случай, если запрос будет на английском, в обратный индекс TRevIndex было добавлено поле, которое сопоставляет английскому слову нужный токен:
+\begin{lstlisting}[language=C++]
+TPatriciaTrie<TArray<TTokenData*>> trToTokenData;
+\end{lstlisting}
+
+Далее надо было научиться добавлять переводы в индекс:
+\begin{lstlisting}[language=C++]
+std::size_t TRevIndex::AddTranslation(std::string& token, std::string& translation) {
+    TPatriciaTrieItem<TTokenData>* tItem = this->tokenToTokenData.LookupNode(token);
+
+    if (tItem == nullptr) {
+        return 1;
+    }
+
+    TTokenData* data  = tItem->GetData();
+    data->translation = translation;
+
+    TPatriciaTrieItem<TArray<TTokenData*>>* trItem = this->trToTokenData.LookupNode(translation);
+    if (trItem == nullptr) {
+        TArray<TTokenData*> array = TArray<TTokenData*>();
+        trItem = this->trToTokenData.Insert(translation, array);
+    }
+
+    trItem->GetData()->Push(data);
+    return 0;
+}
+\end{lstlisting}
+
+Так как вместо одного поля, который сопоставляет слову нужный токен, имеется теперь два таких поля, в коде были внесены правки, учитывающие этот фактор. К примеру вот один из примеров:
+\begin{lstlisting}[language=C++]
+TArray<TFileData*> TRevIndex::GetArray(std::string& token) {
+    TArray<TTokenData*> array;
+    TTokenData* tokenData = this->tokenToTokenData.Lookup(token);
+    if (tokenData == nullptr) {
+
+        std::cout << "Can't find <" << token << "> in RU map" << std::endl;
+
+        TArray<TTokenData*>* tmp = this->trToTokenData.Lookup(token);
+        if (tmp != nullptr) {
+            for(std::size_t n = 0; n < tmp->Size(); ++n) {
+                array.Push(tmp->Get(n));
+            }
+        }
+        else {
+            std::cout << "Can't find <" << token << "> in EN map" << std::endl;
+        }
+    }
+    else {
+        array.Push(tokenData);
+    }
+
+    TArray<TFileData*> callback;
+
+    for(std::size_t n = 0; n < array.Size(); ++n) {
+        TArray<TFileData*>* tmp = &(array[n]->files);
+        for(std::size_t m = 0; m < tmp->Size(); ++m) {
+            callback.Push(tmp->Get(m));
+        }
+    }
+
+    return TArray<TFileData*>(callback);
+}
+\end{lstlisting}
+
+В синтаксическое дерево TSyntaxTree был добавлен учёт переводов токенов. Переводы добавляются в отдельный массив, который выдаётся по запросу:
+\begin{lstlisting}[language=C++]
+TArray<TTokenData*> array = this->revIndex->GetTokenData(nToken);
+for (std::size_t i = 0; i < array.Size(); ++i) {
+    if (nToken == array[i]->token) {
+        this->alternates.Push(array[i]->translation);
+    }
+    else {
+        this->alternates.Push(array[i]->token);
+    }
+}
+this->tokenList.Push(array);
+\end{lstlisting}
+
+Также поиск переводов запроса осуществляется сразу после получения списка документов:
+\begin{lstlisting}[language=C++]
+TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
+TArray<std::string> translates = search.GetAlternate();
+str = "";
+for (std::size_t i = 0; i < translates.Size(); ++i) {
+    n = SaveSendMsg(clientSock, buffer, translates[i]);
+    if (n == -1 || n == 0) {
+        break;
+    }
+}
+if (n == -1 || n == 0) {
+    break;
+}
+\end{lstlisting}
+
+Есть множество более мелких корректировок, но они не стоят внимания, потому что либо несущественны, либо не совсем будут соответствовать теме проекта.

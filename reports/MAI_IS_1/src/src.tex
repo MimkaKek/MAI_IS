@@ -1,0 +1,197 @@
+\section{Описание}
+Для начала надо определиться, откуда взять блок документов. 
+
+Первая мысль, которая пришла на ум - Кинопоиск. Сначала я пробовал найти какие-то дампы на вроде тех, что есть у Википедии, но не обнаружил. Поэтому решил постараться написать паука, который был выгружал страницы на компьютер. 
+
+Паука я написал и запустил. Он сначала читал robots.txt, а затем перемещался по карте сайта. Скорость не очень радовала - я отправлял не больше 1 запроса в 0.1 секунды, чтобы случайно не переборщить с запросами. Из-за этого я его на протяжении нескольких недель оставлял на фоне, предварительно не убедившись, что паук выгружает то, что нужно.
+
+Спустя пару недель решил проверить, какие страницы выгрузило, чтобы понять как их парсить для следующих лабораторных, но встретил лишь сплошную капчу. Был разочарован в своей неаккуратности и потере времени.
+
+Какое-то время пытался решить эту проблему, но не вышло. Из-за этого решил отказаться от Кинопоиска в пользу дампа Википедии \linebreak(https://dumps.wikimedia.org). Там предоставлялись архивированные xml-файлы, в которых содержалась некоторая часть страниц Википедии. Скачал 3 таких файла.
+
+Я планировал его разбить на множество простых html-страниц, с которыми уже взаимодействовал будущий поисковик. Для этого я посмотрел на его структуру и сделали некоторые выводы.
+
+Структура у него довольно простая - сначала пишется различная справочная информация по дампу, а затем в теге <page> подряд записаны сами страницы. Однако не все страницы были полезными - некоторые из них были лишь служебными и в них не содеражалась полезная информация для поиска. Поэтому такие страницы я отсеивал, благо их было легко отличить и учесть в парсере.
+
+Ниже приведена таблица со всеми данными по дампу:
+\begin{center}
+\begin{tabular}{ |c|c|c|c| } 
+ \hline
+ Размер дампа (сжатого), МБ & 747.0 & 689.0 & 461.9\\
+ \hline
+ Размер дампа, ГБ & 4.2 & 3.7 & 2.6 \\
+ \hline
+\end{tabular}
+\end{center}
+
+Количество сегментов <page> - 2417902 \\
+Количество полезных сегментов - 757205
+
+Время, затраченное на его парсинг и разделение на множество html-файлов: 54 минуты 36 секунд.
+
+Средний размер получившегося html-файла: 9.955 КБ
+\pagebreak
+
+\section{Исходный код}
+Исходный код с пауков к сожалению не показать. Я успел его удалить.
+
+Касательно парсера для дампа - код ниже:
+\lstset{extendedchars=\true}
+\begin{lstlisting}[language=Python]
+from bs4 import BeautifulSoup
+import time
+import os
+import json
+from sys import argv
+
+class HTMLExtractor:
+    
+    def __init__(self):
+        
+        self.buffer          = ""
+
+        self.BASE_DIR        = "./ruwiki/"
+        self.pathToSave      = "backup.json"
+
+        self.IGNORE_TITLE    = ["Категория:", "Файл:", "Шаблон:", "Википедия:", "Проект:"]
+        self.IGNORE_TEXT     = ["#перенаправление", "#Перенаправление", "#ПЕРЕНАПРАВЛЕНИЕ", "#REDIRECT", "#Redirect", "#redirect"]
+
+        self.total_html      = 0
+        self.total_pages     = 0
+        self.total_lines     = 0
+        self.current_line    = 0
+
+        self.begin_time      = time.time()
+
+    def createHTML(self, title, text, name):
+
+        for ignore_line in self.IGNORE_TITLE:
+            if ignore_line in title:
+                return
+            
+        for ignore_line in self.IGNORE_TEXT:
+            if ignore_line in text:
+                return
+
+        htmlTemplate = "<!DOCTYPE html> <html> <body> <h1>" + title + "</h1> <p>" + text + "</p> </body> </html>"
+        with open(self.BASE_DIR + str(name) + ".html", "w") as file:
+            file.write(htmlTemplate)
+        
+        self.total_html += 1
+        return
+
+
+    def parseXMLSegment(self, buffer):
+        soup = BeautifulSoup(buffer, "xml")
+        title = soup.find("title")
+        text = soup.find("text")
+        return title.text, text.text
+
+    def beforeStart(self):
+        if not os.path.exists(self.BASE_DIR):
+            os.makedirs(self.BASE_DIR)
+
+        if os.path.exists(self.pathToSave):
+            with open(self.pathToSave, "r") as backupFile:
+                data = json.load(backupFile)
+                self.total_html  = data["total_html"]
+                self.total_pages = data["total_pages"]
+                self.total_lines = data["total_lines"]
+                self.buffer      = data["buffer"]
+
+    def start(self, files):
+
+        self.beforeStart()
+
+        get_page_segment = False
+        for file in files:
+            with open(file, "r") as xmlf:
+                try:
+                    for line in xmlf:
+                        if self.current_line < self.total_lines:
+                            print("\r> Skip line: " + str(self.current_line), end="")
+                            self.current_line += 1
+                            continue
+                        if "<page>" in line:
+                            get_page_segment = True
+                        if get_page_segment:
+                            self.buffer += line
+                        if "</page>" in line:
+                            get_page_segment = False
+                            delta_time = time.gmtime(time.time() - self.begin_time)
+                            self.total_pages += 1
+                            print("\33[2K\r| Total time: {hour:02d}:{min:02d}:{sec:02d} | Total pages: {total_p:10d} | Total HTML-docs: {total_h:10d} | Total lines: {total_l:15d} |".format(hour=delta_time.tm_hour, min=delta_time.tm_min, sec=delta_time.tm_sec, total_p=self.total_pages, total_h=self.total_html, total_l=self.total_lines), end="")
+                            title, text = self.parseXMLSegment(self.buffer)
+                            self.createHTML(title, text, self.total_html)
+                            self.buffer = ""
+                        
+                        self.current_line += 1
+                        self.total_lines += 1
+
+                except KeyboardInterrupt as e:
+                    print("")
+                    print("Stopped!")
+                    print(e)
+                    save = json.dumps(self.__dict__)
+                    with open(self.pathToSave, "w") as backupFile:
+                        backupFile.write(save)
+                    return 1
+
+                except BaseException as e:
+                    print("")
+                    print("Error while getting document. Exit!")
+                    print(e)
+                    save = json.dumps(self.__dict__)
+                    with open(self.pathToSave, "w") as backupFile:
+                        backupFile.write(save)
+                    return 1
+
+        print("Finished!\nTotal pages: {total_p:10d}\nTotal html-files: {total_h:10d}\n".format(total_p=self.total_pages, total_h=self.total_html))
+
+if __name__ == "__main__":
+    if len(argv) > 1:
+        extractor = HTMLExtractor()
+        extractor.start(argv[1:])
+    else:
+        print("Example usage: python " + argv[0] + " [dir_path...]")
+
+\end{lstlisting}
+
+Также имеется скрипт, вычисляющий средний размер файла:
+\begin{lstlisting}[language=Python]
+import os
+from sys import argv
+
+def main():
+    if len(argv) > 1:
+        roots = []
+        for arg in argv:
+            if arg == argv[0]:
+                continue
+            roots.append(arg)
+
+        total_size = 0
+        print("=============================")
+        for root in roots:
+            if not os.path.exists(os.path.join(root, "html")):
+                os.makedirs(os.path.join(root, "html"))
+
+            file_num = 0
+            onlyfiles = [f for f in os.listdir(os.path.join(root, "html")) if os.path.isfile(os.path.join(root, "html", f))]
+            for file in onlyfiles:
+                file_num += 1
+                total_size += os.path.getsize(os.path.join(root, "html", file))
+                avg_size = total_size / file_num
+                print("\33[2K\r| Total size = {total:12d} | Avg size = {avg:6.4f} | Counting file size... {path}".format(total=total_size, avg=avg_size, path=os.path.join(root, "html", file)), end="")
+            print("")
+        print("=============================")
+
+    else:
+        print("Example usage: python " + argv[0] + " [dir_paths...]")
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\pagebreak
+

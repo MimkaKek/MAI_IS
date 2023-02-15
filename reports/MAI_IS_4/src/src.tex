@@ -1,0 +1,1050 @@
+\section{Описание}
+
+Первым делом необходимо написать небольшой парсер, который бы разделял \&\&, ||, скобки, ! и сами слова, и в соответствии с полученным списком выполнял необходимую работу над индексом и формировал результат.
+
+Первое время я обходился без синтаксического дерева, и потому смотрел на работу парсера исключительно в рамках простых запросов, где фигурируют одинаковые логические операции вроде ||, при этом не рассматривая скобки и отрицание - первое бы просто не работало должным образом в некоторых ситуациях, а со вторым сложности в получении результатов (для битовой матрицы решение было, но для обратного индекса нет).
+
+Однако со временем понадобилось реализовывать полноценное синтаксическое дерево. Узел этого дерева имел следующие поля - строку в качестве токена (или логической операции), а также три ссылки на другие узлы (2 дочерних и 1 родитель).
+
+В итоге всё свелось к следующей схеме:
+\begin{enumerate}
+    \item Запрос обрабатывается парсером. На выходе получается список токенов и логических операций.
+    \item Элементы списка вставляются поочерёдно в синтаксическое дерево. Подробности вставки раскрывать не стану - получится ещё больше текста.
+    \item По этому дереву осуществляется обход с целью получения результата запроса. Если узлом является токен - производится поиск по индексу. Если узлом является любая логическая операция - осуществляется соответствующая операция.
+    \item Финальный результат возвращается в виде списка указателей на TFileData.
+\end{enumerate}
+
+Финальный результат изначально выводился в терминал, но по условию задания необходимо было сделать веб-сервис, поэтому в дальнейшем я осуществил взаимодействие с Python Flask посредством сокета. Сначала отправляется количество полученных файлов, а затем файлы по 1 штуке отправляются на веб-сервис, при этом стороны между собой помимо файла отправляют подтверждение получения файла, чтобы случайно не забить сокет.
+
+Касательно производительности запросов - в среднем поиск по ~750,000 файлам осуществляется в среднем за 0.021861 секунд. Замеры времени происходят со стороны веб-сервиса, так что тут ещё учитывается время на отправку списка файлов от программы на С++ к веб-сервису.
+
+Корректность выборки файлов можно подтвердить, кликнув по их ссылке и через поиск в браузере поискав токен.
+
+Запросы, при которых поиск происходит гораздо дольше - одиночное часто встречающееся в файлах слово или запрос с применением логической операции ИЛИ, в котором фигурируют часто встречающиеся слова. Проблема заключается в больших списках файлов - при составлении результата узел дерева берёт списки файлов из дочерних узлов и сливает вместе. Оно может происходить недостаточно быстро, потому что по сути там выполняется сортировка слиянием по ID файлов. Также сам по себе список файлов будучи большим может доставить проблем, потому что файлы поштучно отправляются через сокет. Как правило времени на поиск уходило от ~0.6 до нескольких секунд.
+
+\pagebreak
+
+\section{Исходный код}
+
+Основной файл - main.cpp:
+\begin{lstlisting}[language=C++]
+#include <string>
+#include <cstdlib>
+#include <iostream>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <string.h>
+
+#include "TSearch.hpp"
+#include "TArray.hpp"
+#include "TSyntaxTree.hpp"
+
+int caseSocket(TSearch& search) {
+    
+    char buffer[1000];
+    int n;
+    const int SERVER_PORT = 50007;
+
+    sockaddr_in serverAddr;
+    serverAddr.sin_family       = AF_INET;
+    serverAddr.sin_port         = htons(SERVER_PORT);
+    serverAddr.sin_addr.s_addr  = INADDR_ANY;
+
+    sockaddr_in clientAddr;
+    socklen_t   sin_size = sizeof(struct sockaddr_in);
+
+    int serverSock = socket(AF_INET, SOCK_STREAM, 0);
+    bind(serverSock, (struct sockaddr*)&serverAddr, sizeof(struct sockaddr));
+    listen(serverSock, 1);
+
+    while(true) {
+        std::cout << "Accept new client TCP connect\n";
+        int clientSock = accept(serverSock, (struct sockaddr*) &clientAddr, &sin_size);
+
+        while (true) {
+                bzero(buffer, 1000);
+
+                std::cout << "Read" << std::endl;
+                n = recv(clientSock, buffer, 500, 0);
+                if (n == -1 || n == 0) {
+                    break;
+                }
+                std::cout << "Confirmation code  " << n << std::endl;
+                std::cout << "Server received:  " << buffer << std::endl;
+                std::string str = buffer;
+                
+                TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
+                
+                str = std::to_string(callback.Size());
+                strcpy(buffer, str.c_str());
+                std::cout << "Write: " << buffer << std::endl;
+                n = send(clientSock, buffer, strlen(buffer), 0);
+
+                for(std::size_t i = 0; i < callback.Size(); ++i) {
+                    str = callback[i]->filepath + "&&&" + callback[i]->title + "&&&" + std::to_string(callback[i]->score);
+                    strcpy(buffer, str.c_str());
+                    std::cout << "Write: " << buffer << std::endl;
+                    n = send(clientSock, buffer, strlen(buffer), 0);
+                    if (n == -1) {
+                        break;
+                    }
+                    n = recv(clientSock, buffer, 500, 0);
+                    if (n == -1 || n == 0) {
+                        break;
+                    }
+                }
+
+                if (n == -1 || n == 0) {
+                    break;
+                }
+        }
+        std::cout << "Close socket" << std::endl;
+        close(clientSock);
+    }
+
+    return 0;
+}
+
+int caseTerminal(TSearch& search, std::string prefixPath, std::string suffixPath) {
+    std::string str = "";
+
+    while (std::getline(std::cin, str)) {
+
+        // std::cout << "Stupid Search" << std::endl;
+        // callback = search.StupidSearch(str);
+        // callback.Print();
+
+        // std::cout << "Boolean Search" << std::endl;
+        // callback = search.BooleanSearch(str);
+        // callback.Print();
+
+        std::cout << "Rev Search" << std::endl;
+        TArray<TFileData*> callback = search.Search(str, TSearch::REV_INDEX);
+        for(std::size_t i = 0; i < callback.Size(); ++i) {
+            std::cout << "Path: "  << prefixPath << callback[i]->filepath << suffixPath << std::endl;
+            std::cout << "Title: " << callback[i]->title << std::endl;
+            std::cout << "Score: " << callback[i]->score << std::endl;
+            std::cout << std::endl;
+        }
+    }
+
+    return 0;
+}
+
+int main() {
+
+    std::string path = "./templates/ruwiki/data";
+    TSearch search = TSearch(path);
+    std::string prefixPath = "ruwiki/html/";
+    std::string suffixPath = ".html";
+
+    search.LoadIndex(TSearch::REV_INDEX);
+    caseSocket(search);
+    //caseTerminal(search, prefixPath, suffixPath);
+    std::cout << "End!" << std::endl;
+    return 0;
+}
+\end{lstlisting}
+
+Синтаксическое дерево - TSyntaxTree.hpp:
+\begin{lstlisting}[language=C++]
+#ifndef T_SYNTAX_TREE
+#define T_SYNTAX_TREE
+
+#include <iostream>
+#include "TSyntaxTreeItem.hpp"
+#include "TBitTable.hpp"
+#include "TRevIndex.hpp"
+#include "TArray.hpp"
+
+class TSyntaxTree {
+    private:
+        TSyntaxTreeItem*    root;
+        TSyntaxTreeItem*    currentNode;
+        std::string         lastToken;
+        bool                isBool;
+        TRevIndex*          revIndex;
+
+        TArray<TTokenData*> tokenList;
+
+        void _InsertAND(TSyntaxTreeItem*);
+        void _InsertOR(TSyntaxTreeItem*);
+        void _InsertOpenBracket(TSyntaxTreeItem*);
+        void _InsertCloseBracket();
+        void _InsertToken(TSyntaxTreeItem*);
+        void _InsertNegation(TSyntaxTreeItem*);
+        void _InsertNewParentNode(TSyntaxTreeItem*);
+        void _InsertNewQuote(TSyntaxTreeItem*);
+        void _LookForQuote();
+        void _LookForNegation();
+        void _RecPrint(TSyntaxTreeItem*, int);
+        void _SortArray(TArray<TFileData*>&);
+        void _RecSortArray(TArray<TFileData*>&, std::size_t, std::size_t);
+
+        unsigned char _RecCalcBool(TSyntaxTreeItem*, std::size_t, TBitIndex*);
+        TArray<TFileData*> _RecCalcBool(TSyntaxTreeItem*);
+
+    public:
+
+        TSyntaxTree();
+        TSyntaxTree(TRevIndex*);
+        ~TSyntaxTree();
+        
+        TArray<TFileData*> CalcBool(TBitIndex*);
+        TArray<TFileData*> CalcBool();
+
+        TArray<TTokenData*> GetTokenList();
+
+        void Clear();
+        void Insert(std::string);
+        void Print();
+
+        void SetIndexPtr(TRevIndex*);
+};
+
+#endif
+\end{lstlisting}
+
+Синтаксическое дерево - TSyntaxTree.cpp:
+\begin{lstlisting}[language=C++]
+#include "TSyntaxTree.hpp"
+
+TSyntaxTree::TSyntaxTree() {
+    this->root = nullptr;
+    this->lastToken = "";
+    this->currentNode = nullptr;
+    this->isBool = false;
+    this->revIndex = nullptr;
+}
+
+TSyntaxTree::TSyntaxTree(TRevIndex* revIndex) {
+    this->root = nullptr;
+    this->lastToken = "";
+    this->currentNode = nullptr;
+    this->isBool = false;
+    this->revIndex = revIndex;
+}
+
+TSyntaxTree::~TSyntaxTree() {
+    if(root) {
+        delete root;
+    }
+}
+
+void TSyntaxTree::SetIndexPtr(TRevIndex* revIndex) {
+    this->revIndex = revIndex;
+}
+
+void TSyntaxTree::_InsertNewParentNode(TSyntaxTreeItem* newParentNode) {
+
+    TSyntaxTreeItem* oldParent = this->currentNode->getParent();
+
+    newParentNode->setLeft(this->currentNode);
+    newParentNode->setParent(oldParent);
+    this->currentNode->setParent(newParentNode);
+
+    if(this->root == this->currentNode) {
+        this->root = newParentNode;
+    }
+    else {
+        if (oldParent->getLeft() == this->currentNode) {
+            oldParent->setLeft(newParentNode);
+        }
+        else {
+            oldParent->setRight(newParentNode);
+        }
+    }
+
+    this->currentNode = newParentNode;
+    return;
+}
+
+void TSyntaxTree::_LookForNegation() {
+
+    if (this->currentNode == this->root) {
+        return;
+    }
+
+    TSyntaxTreeItem* tmp = this->currentNode;
+
+    while(tmp->getParent()) {
+        
+        tmp = tmp->getParent();
+        std::string* currentToken = tmp->getTokenPtr();
+
+        if(*currentToken == "!" && *(tmp->getLeft()->getTokenPtr()) != "(") {
+            tmp->setToken("!!");
+            break;
+        }
+
+    }
+
+    if(tmp != this->root) {
+        this->currentNode = tmp;
+    }
+
+    return;
+}
+
+void TSyntaxTree::_InsertNegation(TSyntaxTreeItem* newNegation) {
+    std::string* lastToken = this->currentNode->getTokenPtr();
+    if (*lastToken == "&&" || *lastToken == "||") {
+        if(this->currentNode->getRight() == nullptr) {
+            this->currentNode->setRight(newNegation);
+            newNegation->setParent(this->currentNode);
+        }
+    } 
+    else if (*lastToken == "(" || *lastToken == "!") {
+        this->currentNode->setLeft(newNegation);
+        newNegation->setParent(this->currentNode);
+    }
+    else {
+        TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
+        this->_InsertAND(newANDNode);
+        newANDNode->setRight(newNegation);
+        newNegation->setParent(newANDNode);
+    }
+    this->currentNode = newNegation;
+    return;
+}
+
+void TSyntaxTree::_InsertOR(TSyntaxTreeItem* newORNode) {
+    std::string* lastToken = this->currentNode->getTokenPtr();
+    if (*lastToken == "(") {
+        std::cout << "ERROR: Bracket before AND/OR!" << std::endl;
+        return;
+    }
+    else if (*lastToken == "!") {
+        std::cout << "ERROR: Negation before AND/OR!" << std::endl;
+        return;
+    }
+    else {
+        this->_InsertNewParentNode(newORNode);
+    }
+
+    this->currentNode = newORNode;
+    return;
+}
+
+void TSyntaxTree::_InsertAND(TSyntaxTreeItem* newANDNode) {
+    std::string* lastToken = this->currentNode->getTokenPtr();
+
+    if (*lastToken == "||") {
+        TSyntaxTreeItem* tmp = this->currentNode->getRight();
+        this->currentNode->setRight(newANDNode);
+        newANDNode->setParent(this->currentNode);
+
+        newANDNode->setLeft(tmp);
+        tmp->setParent(newANDNode);
+    }
+    else if (*lastToken == "(") {
+        std::cout << "ERROR: Bracket before AND/OR!" << std::endl;
+        return;
+    }
+    else if (*lastToken == "!") {
+        std::cout << "ERROR: Negation before AND/OR!" << std::endl;
+        return;
+    }
+    else {
+        this->_InsertNewParentNode(newANDNode);
+    }
+
+    this->currentNode = newANDNode;
+    return;
+}
+
+void TSyntaxTree::_InsertToken(TSyntaxTreeItem* newTokenNode) {
+    std::string* currentToken = this->currentNode->getTokenPtr();
+    if ((*currentToken == "&&" || *currentToken == "||") && this->currentNode->getRight() == nullptr) {
+        this->currentNode->setRight(newTokenNode);
+        newTokenNode->setParent(this->currentNode);
+    }
+    else if (*currentToken == "!") {
+            this->currentNode->setLeft(newTokenNode);
+            newTokenNode->setParent(this->currentNode);
+            this->currentNode->setToken("!!");
+    } 
+    else if (*currentToken == "(") {
+        this->currentNode->setLeft(newTokenNode);
+        newTokenNode->setParent(this->currentNode);
+        this->currentNode = newTokenNode;
+    } else {
+        this->_LookForNegation();
+        TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
+        this->_InsertAND(newANDNode);
+        newANDNode->setRight(newTokenNode);
+        newTokenNode->setParent(newANDNode);
+    }
+
+    return;
+}
+
+
+void TSyntaxTree::_InsertCloseBracket() {
+    if (this->root == nullptr || this->currentNode == nullptr) {
+        return;
+    }
+
+    TSyntaxTreeItem* tmp = this->currentNode;
+
+    while(*(tmp->getTokenPtr()) != "(") {
+        tmp = tmp->getParent();
+        if (tmp == nullptr) {
+            return;
+        }
+    }
+
+    tmp->setToken(")");
+    this->currentNode = tmp;
+
+    this->_LookForNegation();
+    return;
+}
+
+void TSyntaxTree::_InsertOpenBracket(TSyntaxTreeItem* newBRNode) {
+    std::string* lastToken = this->currentNode->getTokenPtr();
+    if ((*lastToken == "&&" || *lastToken == "||") && this->currentNode->getRight() == nullptr) {
+        this->currentNode->setRight(newBRNode);
+        newBRNode->setParent(this->currentNode);
+    } 
+    else if (*lastToken == "(" || *lastToken == "!") {
+        this->currentNode->setLeft(newBRNode);
+        newBRNode->setParent(this->currentNode);
+    }
+    else {
+        TSyntaxTreeItem* newANDNode = new TSyntaxTreeItem(std::string("&&"));
+        this->_InsertAND(newANDNode);
+        newANDNode->setRight(newBRNode);
+        newBRNode->setParent(newANDNode);
+    }
+    
+    this->currentNode = newBRNode;
+    return;
+}
+
+void TSyntaxTree::Insert(std::string nToken) {
+
+    if (nToken == ")") {
+        this->_InsertCloseBracket();
+        return;
+    }
+
+    TSyntaxTreeItem* newNode = new TSyntaxTreeItem(nToken, nullptr, nullptr, nullptr);
+
+    if(this->root == nullptr) {
+        this->root = newNode;
+        this->currentNode = newNode;
+        if(nToken != "&&" && nToken != "||" && nToken != "!" && nToken != "(") {
+            this->tokenList.Push(this->revIndex->GetTokenData(nToken));
+        }
+        return;
+    }
+
+    if(nToken == "&&") {
+        this->isBool = true;
+        this->_InsertAND(newNode);
+    }
+    else if(nToken == "||") {
+        this->isBool = true;
+        this->_InsertOR(newNode);
+    }
+    else if(nToken == "!") {
+        this->_InsertNegation(newNode);
+    }
+    else if(nToken == "(") {
+        this->_InsertOpenBracket(newNode);
+    }
+    else {
+        this->_InsertToken(newNode);
+        this->tokenList.Push(this->revIndex->GetTokenData(nToken));
+    }
+
+    return;
+}
+
+unsigned char TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node, std::size_t fileID, TBitIndex* index) {
+
+    if (!node) {
+        return 1;
+    }
+
+    std::string* token = node->getTokenPtr();
+
+    if (*token == "||") {
+        return this->_RecCalcBool(node->getLeft(), fileID, index) | this->_RecCalcBool(node->getRight(), fileID, index);
+    }
+    else if (*token == "&&") {
+        return this->_RecCalcBool(node->getLeft(), fileID, index) & this->_RecCalcBool(node->getRight(), fileID, index);
+    }
+    else if (*token == "!!") {
+        return !this->_RecCalcBool(node->getLeft(), fileID, index);
+    }
+    else if (*token == ")") {
+        return this->_RecCalcBool(node->getLeft(), fileID, index);
+    }
+    else {
+        return index->BitGet(*token, index->GetFileDataByID(fileID)->filepath);
+    }
+}
+
+TArray<TTokenData*> TSyntaxTree::GetTokenList() {
+    return this->tokenList;
+}
+
+TArray<TFileData*> TSyntaxTree::_RecCalcBool(TSyntaxTreeItem* node) {
+    
+    if (!node) {
+        return TArray<TFileData*>();
+    }
+
+    std::string* token = node->getTokenPtr();
+
+    if (*token == "||") {
+        TArray<TFileData*> a = this->_RecCalcBool(node->getLeft());
+        TArray<TFileData*> b = this->_RecCalcBool(node->getRight());
+        TArray<TFileData*> c;
+
+        std::size_t sizeA = a.Size();
+        std::size_t sizeB = b.Size();
+
+        std::size_t iterA = 0;
+        std::size_t iterB = 0;
+
+        while(iterA < sizeA && iterB < sizeB) {
+            if(a[iterA]->id > b[iterB]->id) {
+                c.Push(b[iterB]);
+                ++iterB;
+            }
+            else if (a[iterA]->id < b[iterB]->id) {
+                c.Push(a[iterA]);
+                ++iterA;
+            }
+            else {
+                c.Push(a[iterA]);
+                ++iterA;
+                ++iterB;
+            }
+        }
+
+        while(iterB < sizeB) {
+            c.Push(b[iterB]);
+            ++iterB;
+        }
+
+        while(iterA < sizeA) {
+            c.Push(a[iterA]);
+            ++iterA;
+        }
+
+        return TArray<TFileData*>(c);
+    }
+    else if (*token == "&&") {
+        TArray<TFileData*> a = this->_RecCalcBool(node->getLeft());
+        TArray<TFileData*> b = this->_RecCalcBool(node->getRight());
+        TArray<TFileData*> c;
+
+        std::size_t sizeA = a.Size();
+        std::size_t sizeB = b.Size();
+
+        std::size_t iterA = 0;
+        std::size_t iterB = 0;
+
+        while(iterA < sizeA && iterB < sizeB) {
+            if(a[iterA]->id > b[iterB]->id) {
+                if(this->isBool == false) {
+                    c.Push(b[iterB]);
+                }
+                ++iterB;
+            }
+            else if (a[iterA]->id < b[iterB]->id) {
+                if(this->isBool == false) {
+                    c.Push(a[iterA]);
+                }
+                ++iterA;
+            }
+            else {
+                c.Push(a[iterA]);
+                ++iterA;
+                ++iterB;
+            }
+        }
+
+        if (this->isBool == false) {
+            while(iterB < sizeB) {
+                c.Push(b[iterB]);
+                ++iterB;
+            }
+            while(iterA < sizeA) {
+                c.Push(a[iterA]);
+                ++iterA;
+            }
+        }
+        
+        return TArray<TFileData*>(c);
+    }
+    else if (*token == "!!") {
+        return this->_RecCalcBool(node->getLeft()); //TODO
+    }
+    else if (*token == ")") {
+        return this->_RecCalcBool(node->getLeft());
+    }
+    else {
+        return this->revIndex->GetArray(*token);
+    }
+ }
+
+TArray<TFileData*> TSyntaxTree::CalcBool(TBitIndex* index) {
+
+    unsigned char result;
+
+    std::size_t sizeF = index->SizeInBits();
+
+    TArray<TFileData*> data;
+
+    for(std::size_t j = 0; j < sizeF; ++j) {
+        
+        result = this->_RecCalcBool(this->root, j, index);
+
+        if(result) {
+            data.Push(index->GetFileDataByID(j));
+        }
+    }
+
+    return TArray<TFileData*>(data);
+}
+
+void TSyntaxTree::_RecSortArray(TArray<TFileData*>& array, std::size_t lPos, std::size_t rPos) {
+    if (lPos == rPos) {
+        return;
+    }
+    int mid = (lPos + rPos) / 2;
+
+    this->_RecSortArray(array, lPos   , mid );
+    this->_RecSortArray(array, mid + 1, rPos);
+
+    int lap = lPos;
+    int rap = mid + 1;
+    TArray<TFileData*> tmp(rPos - lPos + 1);
+
+    for (int step = 0; step < rPos - lPos + 1; ++step) {
+        if ((rap > rPos) || ((lap <= mid) && (array[lap]->score > array[rap]->score))) {
+            tmp[step] = array[lap];
+            ++lap;
+        }
+        else {
+            tmp[step] = array[rap];
+            ++rap;
+        }
+    }
+
+    for (int step = 0, pos = lPos; step < rPos - lPos + 1; ++step, ++pos) {
+        array[pos] = tmp[step];
+    }
+}
+
+TArray<TFileData*> TSyntaxTree::CalcBool() {
+    TArray<TFileData*>  filesList = this->_RecCalcBool(this->root);
+    if (filesList.Size() == 0) {
+        return TArray<TFileData*>(filesList);
+    }
+    this->revIndex->CalcTFxIDF(this->tokenList, filesList);
+    this->_RecSortArray(filesList, 0, filesList.Size() - 1);
+    return TArray<TFileData*>(filesList);
+}
+
+void TSyntaxTree::Clear() {
+    if(this->root) {
+        delete this->root;
+    }
+    this->root = nullptr;
+    this->lastToken = "";
+    this->currentNode = nullptr;
+    this->isBool = false;
+    this->tokenList.Clear();
+}
+
+const int MAX_DEEP = 10;
+
+void TSyntaxTree::_RecPrint(TSyntaxTreeItem* root, int deep) {
+    
+    int pDeep;
+    
+    if ( root->getLeft() != nullptr ) {
+        this->_RecPrint(root->getLeft(), deep + 1);
+    }
+    else {
+        for(int i = 0; i < deep + 1; ++i) {
+            std::cout << ".\t";
+        }
+        std::cout << ".";
+        pDeep = deep + 1;
+        while(pDeep < MAX_DEEP) {
+            ++pDeep;
+            std::cout << "\t.";
+        }
+        std::cout << std::endl;
+    }
+    
+    for(int i = 0; i < deep; ++i) {
+        std::cout << ".\t";
+    }
+    if (root == this->currentNode) {
+        std::cout << "[" << *(root->getTokenPtr()) << "]";
+    }
+    else {
+        std::cout << *(root->getTokenPtr());
+    }
+    if (root->getParent()) {
+        //std::cout << "\t" << *(root->getParent()->getTokenPtr());
+        std::cout << "\t" << ".";
+    }
+    else {
+        std::cout << "\t" << ".";
+    }
+    pDeep = deep + 1;
+    while(pDeep < MAX_DEEP) {
+        ++pDeep;
+        std::cout << "\t.";
+    }
+    std::cout << std::endl;
+
+    if ( root->getRight() != nullptr ) {
+        this->_RecPrint(root->getRight(), deep + 1);
+    }
+    else {
+        for(int i = 0; i < deep + 1; ++i) {
+            std::cout << ".\t";
+        }
+        std::cout << ".";
+        pDeep = deep + 1;
+        while(pDeep < MAX_DEEP) {
+            ++pDeep;
+            std::cout << "\t.";
+        }
+        std::cout << std::endl;
+    }
+}
+
+void TSyntaxTree::Print() {
+    this->_RecPrint(this->root, 0);
+    return;
+}
+\end{lstlisting}
+
+Узел синтаксического дерева - TSyntaxTreeItem.hpp:
+\begin{lstlisting}[language=C++]
+#ifndef T_SYNTAX_TREE_ITEM_HPP
+#define T_SYNTAX_TREE_ITEM_HPP
+
+#include <string>
+
+class TSyntaxTreeItem {
+    private:
+
+        std::string      token;
+        TSyntaxTreeItem* left;
+        TSyntaxTreeItem* right;
+        TSyntaxTreeItem* parent;
+
+    public:
+
+        TSyntaxTreeItem();
+        TSyntaxTreeItem(std::string);
+        TSyntaxTreeItem(std::string, TSyntaxTreeItem*, TSyntaxTreeItem*, TSyntaxTreeItem*);
+        ~TSyntaxTreeItem();
+
+        std::string* getTokenPtr();
+
+        TSyntaxTreeItem* getLeft();
+        TSyntaxTreeItem* getRight();
+        TSyntaxTreeItem* getParent();
+
+        void setLeft(TSyntaxTreeItem*);
+        void setRight(TSyntaxTreeItem*);
+        void setParent(TSyntaxTreeItem*);
+        void setToken(std::string);
+};
+
+#endif
+\end{lstlisting}
+
+Узел синтаксического дерева - TSyntaxTreeItem.cpp:
+\begin{lstlisting}[language=C++]
+#include "TSyntaxTreeItem.hpp"
+
+TSyntaxTreeItem::TSyntaxTreeItem() {
+    this->left = nullptr;
+    this->right = nullptr;
+    this->parent = nullptr;
+}
+
+TSyntaxTreeItem::TSyntaxTreeItem(std::string str) {
+    this->token = str;
+    this->left = nullptr;
+    this->right = nullptr;
+    this->parent = nullptr;
+}
+
+TSyntaxTreeItem::TSyntaxTreeItem(std::string str, TSyntaxTreeItem* left, TSyntaxTreeItem* right, TSyntaxTreeItem* parent) {
+    this->token = str;
+    this->left = left;
+    this->right = right;
+    this->parent = parent;
+}
+
+TSyntaxTreeItem::~TSyntaxTreeItem() {
+    if(this->left) {
+        delete this->left;
+    }
+    if(this->right) {
+        delete this->right;
+    }
+}
+
+std::string* TSyntaxTreeItem::getTokenPtr() {
+    return &(this->token);
+}
+
+TSyntaxTreeItem* TSyntaxTreeItem::getLeft() {
+    return this->left;
+}
+
+TSyntaxTreeItem* TSyntaxTreeItem::getRight() {
+    return this->right;
+}
+
+TSyntaxTreeItem* TSyntaxTreeItem::getParent() {
+    return this->parent;
+}
+void TSyntaxTreeItem::setLeft(TSyntaxTreeItem* left) {
+    this->left = left;
+    return;
+}
+
+void TSyntaxTreeItem::setRight(TSyntaxTreeItem* right) {
+    this->right = right;
+    return;
+}
+
+void TSyntaxTreeItem::setParent(TSyntaxTreeItem* parent) {
+    this->parent = parent;
+    return;
+}
+
+void TSyntaxTreeItem::setToken(std::string nToken) {
+    this->token = nToken;
+    return;
+}
+\end{lstlisting}
+
+Промежуточный класс, предоставляющий удобный интерфейс и осуществляющий первичный парсинг - TSearch.hpp:
+\begin{lstlisting}[language=C++]
+#ifndef T_SEARCH_HPP
+#define T_SEARCH_HPP
+#include <string>
+#include <fstream>
+#include <filesystem>
+#include <cstring>
+#include <chrono>
+
+#include "TArray.hpp"
+#include "TFindedData.hpp"
+#include "TBitTable.hpp"
+#include "TSyntaxTree.hpp"
+#include "TRevIndex.hpp"
+#include "TFileData.hpp"
+
+namespace fs = std::filesystem;
+
+class TSearch {
+    private:
+        std::string              root;
+        std::string              search;
+
+        TBitIndex                bitIndex;
+        TSyntaxTree              tree;
+        TRevIndex                revIndex;
+
+        void _BoolParse();
+
+        TArray<TFileData*> _RevSearch(std::string);
+        TArray<TFileData*> _BitSearch(std::string);
+
+    public:
+
+        enum TYPE { REV_INDEX, BIT_INDEX };
+
+        TSearch();
+        TSearch(std::string&);
+        ~TSearch();
+
+        void LoadIndex(TYPE);
+
+        TArray<TFileData*> Search(std::string, TYPE);
+};
+
+#endif
+\end{lstlisting}
+
+Промежуточный класс, предоставляющий удобный интерфейс и осуществляющий первичный парсинг - TSearch.cpp:
+\begin{lstlisting}[language=C++]
+#include "TSearch.hpp"
+
+TSearch::TSearch() {
+    this->root = ".";
+};
+
+TSearch::TSearch(std::string& path) {
+    this->root = path;
+};
+
+TSearch::~TSearch() {};
+
+void TSearch::_BoolParse() {
+
+    std::size_t size = this->search.length();
+    std::string buffer = "";
+
+    bool isQuote = false;
+
+    for(std::size_t i = 0; i < size; ++i) {
+        if(this->search[i] == '!' || this->search[i] == '(' || this->search[i] == ')') {
+            if(isQuote) {
+                buffer += this->search[i];
+            }
+            else {
+
+                if (buffer != "") {
+                    this->tree.Insert(buffer);
+                    buffer = "";
+                }
+
+                buffer += this->search[i];
+                this->tree.Insert(buffer);
+                buffer = "";
+            }
+        }
+        else if(this->search[i] == '\"') {
+            buffer += this->search[i];
+            isQuote = (isQuote) ? false : true;
+        }
+        else if(this->search[i] != ' ') {
+            buffer += this->search[i];
+        }
+        else {
+            if(isQuote) {
+                buffer += this->search[i];
+            }
+            else {
+                this->tree.Insert(buffer);
+                buffer = "";
+            }
+        }
+    }
+    if (buffer != "") {
+        this->tree.Insert(buffer);
+    }
+
+    return;
+};
+
+void TSearch::LoadIndex(TYPE type) {
+
+    std::string  str;
+    std::string  filePath = "";
+    std::fstream file;
+    TFileData    fileData;
+
+    this->tree.SetIndexPtr(&this->revIndex);
+
+    auto begin = std::chrono::steady_clock::now();
+
+    for (const auto & entry : fs::directory_iterator(this->root)) {
+        filePath = entry.path();
+        file.open(filePath, std::fstream::in);
+        if(file.is_open()) {
+            std::size_t nLine = 0;
+
+            //std::cout << "\rReading... " + filePath;
+
+            fileData.filepath = "";
+            std::size_t fPos = filePath.length();
+            
+            for(fPos = fPos - 6; filePath[fPos] != '/'; --fPos) {
+                fileData.filepath = filePath[fPos] + fileData.filepath;
+            }
+
+            TTokenData  tokenData;
+            int         tokenCount;
+
+            while(std::getline(file, str)) {
+                if (nLine == 0) {
+                    fileData.title = str;
+                    ++nLine;
+                    continue;
+                }
+
+                if (nLine % 2 == 0) {
+                    tokenCount = std::stoi(str);
+                    switch(type) {
+                        case TSearch::BIT_INDEX:
+                            this->bitIndex.Add(tokenData.token, tokenCount, fileData);
+                            break;
+                        case TSearch::REV_INDEX:
+                            this->revIndex.Add(tokenData, tokenCount, fileData);
+                            break;
+                    }
+
+                }
+                else {
+                    tokenData.token = str;
+                }
+
+                ++nLine;
+            }
+            file.close();
+        }
+        else {
+            std::cerr << "ERROR: failed open " << filePath << std::endl;
+            return;
+        }
+    }
+    auto end = std::chrono::steady_clock::now();
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin);
+    std::cout << "\33[2K\rReading finished! Time: " << elapsed_ms.count() << std::endl;
+    return;
+}
+
+TArray<TFileData*> TSearch::Search(std::string strToSearch, TYPE type) {
+    
+    switch(type) {
+        case REV_INDEX:
+            return _RevSearch(strToSearch);
+        case BIT_INDEX:
+            return _BitSearch(strToSearch);
+        default:
+            return TArray<TFileData*>();
+    }
+}
+
+
+TArray<TFileData*> TSearch::_RevSearch(std::string strToSearch) {
+    
+    this->tree.Clear();
+    this->search = strToSearch;
+    this->_BoolParse();
+
+    return TArray<TFileData*>(this->tree.CalcBool());
+}
+
+TArray<TFileData*> TSearch::_BitSearch(std::string strToSearch) {
+
+    this->tree.Clear();
+    this->search = strToSearch;
+    this->_BoolParse();
+    
+    return TArray<TFileData*>(this->tree.CalcBool(&(this->bitIndex)));
+}
+\end{lstlisting}
